@@ -36,8 +36,13 @@ persona-show name:
   cd cli && npx tsx src/index.ts persona show {{name}}
 
 # Show a persona role with portrait (Kitty/Ghostty)
-persona-portrait theme agent="dev" position="top" size="large":
-  cd cli && npx tsx src/index.ts persona show {{theme}} --agent {{agent}} --portrait --portrait-position {{position}} --portrait-size {{size}}
+# Usage: just persona-portrait <theme> [agent] or override position/size:
+#   just pos=bottom persona-portrait dune orchestrator
+#   just size=original persona-portrait star-wars dev
+pos := "top"
+size := "large"
+persona-portrait theme agent="dev":
+  cd cli && npx tsx src/index.ts persona show {{theme}} --agent {{agent}} --portrait --portrait-position {{pos}} --portrait-size {{size}}
 
 # Show resolved config
 config:
