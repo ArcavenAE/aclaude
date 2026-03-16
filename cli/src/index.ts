@@ -93,10 +93,11 @@ personaCmd
   .command("show <name>")
   .description("Show theme details")
   .option("-p, --portrait", "display portraits inline (Kitty/Ghostty)")
-  .option("--portrait-position <pos>", "portrait position: top|bottom|left|right", "top")
+  .option("--portrait-position <pos>", "portrait position: top|bottom", "top")
+  .option("--portrait-align <align>", "portrait alignment: left|right", "left")
   .option("--portrait-size <size>", "portrait size: small|medium|large|original", "original")
   .option("--agent <role>", "show only this agent/role (with portrait if -p)")
-  .action((name: string, opts: { portrait?: boolean; portraitPosition?: string; portraitSize?: string; agent?: string }) => {
+  .action((name: string, opts: { portrait?: boolean; portraitPosition?: string; portraitAlign?: string; portraitSize?: string; agent?: string }) => {
     const theme = loadTheme(name);
     if (!theme) {
       console.error(`Theme "${name}" not found.`);
@@ -112,14 +113,15 @@ personaCmd
         process.exit(1);
       }
       const portrait = resolvePortrait(name, agent, opts.agent);
-      const size = (opts.portraitSize || "large") as keyof typeof portrait;
-      const imgPath = portrait[size] || portrait.large || portrait.medium || portrait.small || null;
-      const position = (opts.portraitPosition || "top") as "top" | "bottom" | "left" | "right";
+      const sizeKey = (opts.portraitSize || "original") as keyof typeof portrait;
+      const imgPath = portrait[sizeKey] || portrait.original || portrait.large || portrait.medium || portrait.small || null;
+      const position = (opts.portraitPosition || "top") as "top" | "bottom";
+      const align = (opts.portraitAlign || "left") as "left" | "right";
       const showImage = opts.portrait && imgPath;
 
-      // Portrait before card (top or left)
-      if (showImage && (position === "top" || position === "left")) {
-        if (!displayPortrait(imgPath!, { position })) {
+      // Portrait before card
+      if (showImage && position === "top") {
+        if (!displayPortrait(imgPath!, { align })) {
           console.log("(terminal does not support inline images — try Kitty or Ghostty)");
         }
         console.log("");
@@ -143,10 +145,10 @@ personaCmd
         console.log("Portrait: not installed");
       }
 
-      // Portrait after card (bottom or right)
-      if (showImage && (position === "bottom" || position === "right")) {
+      // Portrait after card
+      if (showImage && position === "bottom") {
         console.log("");
-        if (!displayPortrait(imgPath!, { position })) {
+        if (!displayPortrait(imgPath!, { align })) {
           console.log("(terminal does not support inline images — try Kitty or Ghostty)");
         }
       }

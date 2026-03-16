@@ -193,22 +193,18 @@ export function terminalSupportsImages(): boolean {
   return term === "ghostty" || term === "kitty" || termEnv.includes("kitty");
 }
 
-export type PortraitPosition = "top" | "bottom" | "left" | "right";
+export type PortraitPosition = "top" | "bottom";
+export type PortraitAlign = "left" | "right";
 
 /**
  * Display a portrait in the terminal using `kitten icat`.
  * Returns true if displayed, false if not possible.
- *
- * Position controls alignment:
- *   top/bottom — inline block, left/center/right aligned
- *   left/right — uses kitten icat --align
  */
-export function displayPortrait(portraitPath: string, opts?: { position?: PortraitPosition }): boolean {
+export function displayPortrait(portraitPath: string, opts?: { align?: PortraitAlign }): boolean {
   if (!terminalSupportsImages()) return false;
   if (!existsSync(portraitPath)) return false;
 
-  const position = opts?.position ?? "top";
-  const align = position === "right" ? "right" : "left";
+  const align = opts?.align ?? "left";
 
   try {
     execSync(`kitten icat --align ${align} --transfer-mode=stream "${portraitPath}"`, {
