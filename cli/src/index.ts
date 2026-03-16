@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { loadConfig, getConfigPaths } from "./config.js";
-import { listThemes, loadTheme, getAgent, resolvePortrait, getPortraitCachePath } from "./persona.js";
+import { listThemes, loadTheme, getAgent, resolvePortrait, getPortraitCachePath, displayPortrait, terminalSupportsImages } from "./persona.js";
 import { startSession } from "./session.js";
 import { initTelemetry } from "./telemetry.js";
 
@@ -22,10 +22,10 @@ program
   .action(async (opts) => {
     const overrides: Record<string, unknown> = {};
     if (opts.model) overrides.session = { model: opts.model };
-    if (opts.theme || opts.role || opts.immersion) {
+    if (opts.theme || opts.agent || opts.immersion) {
       overrides.persona = {
         ...(opts.theme && { theme: opts.theme }),
-        ...(opts.role && { role: opts.role }),
+        ...(opts.agent && { role: opts.agent }),
         ...(opts.immersion && { immersion: opts.immersion }),
       };
     }
@@ -92,13 +92,53 @@ personaCmd
 personaCmd
   .command("show <name>")
   .description("Show theme details")
-  .action((name: string) => {
+  .option("-p, --portrait", "display portraits inline (Kitty/Ghostty)")
+  .option("--agent <role>", "show only this agent/role (with portrait if -p)")
+  .action((name: string, opts: { portrait?: boolean; agent?: string }) => {
     const theme = loadTheme(name);
     if (!theme) {
       console.error(`Theme "${name}" not found.`);
       process.exit(1);
     }
 
+    // If --role specified, show just that agent
+    if (opts.agent) {
+      const agent = getAgent(theme, opts.agent);
+      if (!agent) {
+        console.error(`Role "${opts.agent}" not found in theme "${name}".`);
+        console.error(`Available: ${Object.keys(theme.agents).join(", ")}`);
+        process.exit(1);
+      }
+      console.log(`Theme: ${theme.name}`);
+      console.log(`Role:  ${opts.agent}`);
+      console.log(`Character: ${agent.character}`);
+      console.log(`Style: ${agent.style}`);
+      console.log(`Expertise: ${agent.expertise}`);
+      if (agent.trait) console.log(`Trait: ${agent.trait}`);
+      if (agent.quirks?.length) console.log(`Quirks: ${agent.quirks.join("; ")}`);
+      if (agent.catchphrases?.length) {
+        console.log(`Catchphrases:`);
+        for (const c of agent.catchphrases) console.log(`  "${c}"`);
+      }
+
+      const portrait = resolvePortrait(name, agent, opts.agent);
+      if (portrait.medium || portrait.small) {
+        const imgPath = portrait.medium || portrait.small!;
+        const stem = imgPath.split("/").pop()?.replace(/\.png$/, "") || "";
+        console.log(`Portrait: ${stem}.png`);
+        if (opts.portrait) {
+          console.log("");
+          if (!displayPortrait(imgPath)) {
+            console.log("(terminal does not support inline images — try Kitty or Ghostty)");
+          }
+        }
+      } else {
+        console.log("Portrait: not installed");
+      }
+      return;
+    }
+
+    // Full theme display
     console.log(`Theme: ${theme.name}`);
     console.log(`Slug:  ${theme.slug}`);
     console.log(`Source: ${theme.source}`);
@@ -124,7 +164,6 @@ personaCmd
       console.log(`  ${"".padEnd(15)} ${agent.style}`);
       console.log(`  ${"".padEnd(15)} portraits: ${portraitStatus}`);
       if (portrait.small) {
-        // Show the stem (filename without path/extension) as the canonical reference
         const stem = portrait.small.split("/").pop()?.replace(/\.png$/, "") || "";
         console.log(`  ${"".padEnd(15)} file: ${stem}.png`);
       }

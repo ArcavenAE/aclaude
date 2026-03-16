@@ -167,6 +167,48 @@ export function getPortraitCachePath(): string {
   return getPortraitCacheDir();
 }
 
+/**
+ * Check if the terminal supports the Kitty graphics protocol.
+ * Ghostty and Kitty both support it; detected via TERM_PROGRAM or TERM.
+ */
+export function terminalSupportsImages(): boolean {
+  const term = process.env.TERM_PROGRAM?.toLowerCase() || "";
+  const termEnv = process.env.TERM?.toLowerCase() || "";
+  return term === "ghostty" || term === "kitty" || termEnv.includes("kitty");
+}
+
+/**
+ * Display a portrait in the terminal using `kitten icat`.
+ * Returns true if displayed, false if not possible.
+ */
+export function displayPortrait(portraitPath: string, opts?: { width?: number }): boolean {
+  if (!terminalSupportsImages()) return false;
+  if (!existsSync(portraitPath)) return false;
+
+  const { execSync } = require("node:child_process") as typeof import("node:child_process");
+  const width = opts?.width ?? 20;
+
+  try {
+    // kitten icat works in both Kitty and Ghostty
+    execSync(`kitten icat --place ${width}x${width}@0x0 --align left "${portraitPath}"`, {
+      stdio: "inherit",
+      timeout: 5000,
+    });
+    return true;
+  } catch {
+    // Fall back to simpler invocation without --place
+    try {
+      execSync(`kitten icat --transfer-mode=stream "${portraitPath}"`, {
+        stdio: "inherit",
+        timeout: 5000,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export function buildSystemPrompt(
   theme: PersonaTheme,
   agent: PersonaAgent,
