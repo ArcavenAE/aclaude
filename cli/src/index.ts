@@ -94,7 +94,7 @@ personaCmd
   .description("Show theme details")
   .option("-p, --portrait", "display portraits inline (Kitty/Ghostty)")
   .option("--portrait-position <pos>", "portrait position: top|bottom|left|right", "top")
-  .option("--portrait-size <size>", "portrait size: small|medium|large|original", "large")
+  .option("--portrait-size <size>", "portrait size: small|medium|large|original", "original")
   .option("--agent <role>", "show only this agent/role (with portrait if -p)")
   .action((name: string, opts: { portrait?: boolean; portraitPosition?: string; portraitSize?: string; agent?: string }) => {
     const theme = loadTheme(name);

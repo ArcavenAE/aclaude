@@ -40,7 +40,7 @@ persona-show name:
 #   just pos=bottom persona-portrait dune orchestrator
 #   just size=original persona-portrait star-wars dev
 pos := "top"
-size := "large"
+size := "original"
 persona-portrait theme agent="dev":
   cd cli && npx tsx src/index.ts persona show {{theme}} --agent {{agent}} --portrait --portrait-position {{pos}} --portrait-size {{size}}
 
