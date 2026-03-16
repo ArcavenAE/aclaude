@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { loadConfig, getConfigPaths } from "./config.js";
-import { listThemes, loadTheme, getAgent } from "./persona.js";
+import { listThemes, loadTheme, getAgent, resolvePortrait, getPortraitCachePath } from "./persona.js";
 import { startSession } from "./session.js";
 import { initTelemetry } from "./telemetry.js";
 
@@ -115,9 +115,44 @@ personaCmd
     }
     console.log(`\nAgents (${Object.keys(theme.agents).length}):`);
     for (const [role, agent] of Object.entries(theme.agents)) {
+      const portrait = resolvePortrait(name, agent);
+      const portraitStatus = Object.keys(portrait).length > 0
+        ? `[${Object.keys(portrait).join(",")}]`
+        : "[no portraits]";
       console.log(`  ${role.padEnd(15)} ${agent.character}`);
       console.log(`  ${"".padEnd(15)} ${agent.style}`);
+      console.log(`  ${"".padEnd(15)} portraits: ${portraitStatus}`);
     }
+  });
+
+personaCmd
+  .command("portraits")
+  .description("Show portrait cache status")
+  .action(async () => {
+    const { existsSync, readdirSync } = await import("node:fs");
+    const cachePath = getPortraitCachePath();
+    console.log(`Portrait cache: ${cachePath}`);
+
+    if (!existsSync(cachePath)) {
+      console.log("Status: not installed");
+      console.log("\nRun 'aclaude sync' to populate portraits from sources.toml");
+      return;
+    }
+
+    const themeDirs = readdirSync(cachePath).filter((d) =>
+      existsSync(`${cachePath}/${d}`) && !d.startsWith(".")
+    );
+    let totalImages = 0;
+    for (const theme of themeDirs) {
+      for (const size of ["small", "medium", "large", "original"]) {
+        const sizeDir = `${cachePath}/${theme}/${size}`;
+        if (existsSync(sizeDir)) {
+          totalImages += readdirSync(sizeDir).filter((f) => f.endsWith(".png")).length;
+        }
+      }
+    }
+    console.log(`Themes with portraits: ${themeDirs.length}`);
+    console.log(`Total images: ${totalImages}`);
   });
 
 program.parse();

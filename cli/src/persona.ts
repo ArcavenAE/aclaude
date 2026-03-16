@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join, basename } from "node:path";
+import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 export interface PersonaAgent {
@@ -75,6 +75,60 @@ export function loadTheme(slug: string): PersonaTheme | null {
 
 export function getAgent(theme: PersonaTheme, role: string): PersonaAgent | null {
   return theme.agents[role] || null;
+}
+
+// ---------------------------------------------------------------------------
+// Portrait resolution — images live in a global cache, not the repo
+// ---------------------------------------------------------------------------
+
+function getPortraitCacheDir(): string {
+  const xdgData = process.env.XDG_DATA_HOME || join(process.env.HOME || "~", ".local", "share");
+  return join(xdgData, "aclaude", "portraits");
+}
+
+export interface PortraitPaths {
+  small?: string;
+  medium?: string;
+  large?: string;
+  original?: string;
+}
+
+/**
+ * Resolve portrait paths for an agent. Portraits are stored globally at
+ * $XDG_DATA_HOME/aclaude/portraits/{theme-slug}/{size}/{character}.png
+ *
+ * The character filename is derived from shortName (lowercase, hyphenated)
+ * or falls back to a fuzzy match against available files.
+ */
+export function resolvePortrait(themeSlug: string, agent: PersonaAgent): PortraitPaths {
+  const cacheDir = getPortraitCacheDir();
+  const themeDir = join(cacheDir, themeSlug);
+  if (!existsSync(themeDir)) return {};
+
+  // Build candidate filenames from shortName or character
+  const name = (agent.shortName || agent.character || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+  const paths: PortraitPaths = {};
+  for (const size of ["small", "medium", "large", "original"] as const) {
+    const sizeDir = join(themeDir, size);
+    if (!existsSync(sizeDir)) continue;
+
+    // Try exact match first, then prefix match
+    const files = readdirSync(sizeDir).filter((f) => f.endsWith(".png"));
+    const exact = files.find((f) => f.startsWith(name));
+    if (exact) {
+      paths[size] = join(sizeDir, exact);
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * Get the portrait cache directory path (for display/diagnostics).
+ */
+export function getPortraitCachePath(): string {
+  return getPortraitCacheDir();
 }
 
 export function buildSystemPrompt(
