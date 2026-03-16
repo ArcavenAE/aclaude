@@ -133,9 +133,18 @@ export function resolvePortrait(themeSlug: string, agent: PersonaAgent, role?: s
     stem = manifest[themeSlug][role];
   }
 
-  // Fallback: derive from shortName/character
-  if (!stem) {
-    stem = (agent.shortName || agent.character || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  // Fallback: build candidate stems from shortName, character, first name
+  const stems: string[] = [];
+  if (stem) {
+    stems.push(stem);
+  } else {
+    const short = (agent.shortName || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    if (short) stems.push(short);
+    const char = (agent.character || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    if (char && char !== short) stems.push(char);
+    // First name only
+    const firstName = (agent.character || "").split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (firstName && !stems.includes(firstName)) stems.push(firstName);
   }
 
   const paths: PortraitPaths = {};
@@ -143,18 +152,24 @@ export function resolvePortrait(themeSlug: string, agent: PersonaAgent, role?: s
     const sizeDir = join(themeDir, size);
     if (!existsSync(sizeDir)) continue;
 
-    // Exact stem match (manifest provides full stem like "marvin-55115")
-    const exactFile = join(sizeDir, `${stem}.png`);
-    if (existsSync(exactFile)) {
-      paths[size] = exactFile;
-      continue;
-    }
-
-    // Prefix match (fallback for shortName-derived stems)
-    const files = readdirSync(sizeDir).filter((f) => f.endsWith(".png"));
-    const prefixMatch = files.find((f) => f.startsWith(stem!));
-    if (prefixMatch) {
-      paths[size] = join(sizeDir, prefixMatch);
+    // Try each stem candidate
+    let found = false;
+    for (const s of stems) {
+      // Exact file match
+      const exactFile = join(sizeDir, `${s}.png`);
+      if (existsSync(exactFile)) {
+        paths[size] = exactFile;
+        found = true;
+        break;
+      }
+      // Prefix match
+      const files = readdirSync(sizeDir).filter((f) => f.endsWith(".png"));
+      const prefixMatch = files.find((f) => f.startsWith(s));
+      if (prefixMatch) {
+        paths[size] = join(sizeDir, prefixMatch);
+        found = true;
+        break;
+      }
     }
   }
 
