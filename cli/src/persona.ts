@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import { parse as parseYaml } from "yaml";
 
 export interface PersonaAgent {
@@ -185,7 +186,6 @@ export function displayPortrait(portraitPath: string, opts?: { width?: number })
   if (!terminalSupportsImages()) return false;
   if (!existsSync(portraitPath)) return false;
 
-  const { execSync } = require("node:child_process") as typeof import("node:child_process");
   const width = opts?.width ?? 20;
 
   try {
