@@ -122,8 +122,8 @@ personaCmd
       }
 
       const portrait = resolvePortrait(name, agent, opts.agent);
-      if (portrait.medium || portrait.small) {
-        const imgPath = portrait.medium || portrait.small!;
+      if (portrait.small || portrait.medium) {
+        const imgPath = portrait.small || portrait.medium!;
         const stem = imgPath.split("/").pop()?.replace(/\.png$/, "") || "";
         console.log(`Portrait: ${stem}.png`);
         if (opts.portrait) {

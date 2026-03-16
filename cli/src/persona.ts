@@ -186,18 +186,15 @@ export function displayPortrait(portraitPath: string, opts?: { columns?: number 
   if (!terminalSupportsImages()) return false;
   if (!existsSync(portraitPath)) return false;
 
-  const cols = opts?.columns ?? 40;
-
   try {
-    // kitten icat in inline/stream mode — prints image at cursor, flows with text
-    execSync(`kitten icat --align left --scale-up --unicode-placeholder --transfer-mode=stream "${portraitPath}"`, {
+    // kitten icat in inline mode — constrain to terminal columns, no scaling up
+    execSync(`kitten icat --align left --transfer-mode=stream "${portraitPath}"`, {
       stdio: "inherit",
       timeout: 5000,
     });
     return true;
   } catch {
     try {
-      // Minimal fallback
       execSync(`kitten icat "${portraitPath}"`, {
         stdio: "inherit",
         timeout: 5000,
