@@ -76,6 +76,9 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      - name: Embed themes
+        run: bun run cli/scripts/embed-themes.ts
+
       - name: Build stable binary
         run: |
           cd cli

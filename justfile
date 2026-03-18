@@ -51,8 +51,12 @@ config:
 
 # --- Distribution ---
 
+# Embed theme YAMLs into TypeScript for compiled binary
+embed-themes:
+  bun run cli/scripts/embed-themes.ts
+
 # Build standalone binary (bun compile)
-build-dist:
+build-dist: embed-themes
   cd cli && bun build --compile src/index.ts --outfile aclaude
 
 # Build platform-specific binary with name

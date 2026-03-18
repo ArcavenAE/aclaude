@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { parse as parseYaml } from "yaml";
+import { EMBEDDED_THEMES } from "./themes-embedded.js";
 
 export interface PersonaAgent {
   character: string;
@@ -28,8 +29,13 @@ export interface PersonaTheme {
   agents: Record<string, PersonaAgent>;
 }
 
-function getThemesDir(): string {
-  let dir = new URL(".", import.meta.url).pathname;
+function getThemesDir(): string | null {
+  let dir: string;
+  try {
+    dir = new URL(".", import.meta.url).pathname;
+  } catch {
+    return null;
+  }
   for (let i = 0; i < 10; i++) {
     const candidate = join(dir, "personas", "themes");
     if (existsSync(candidate)) return candidate;
@@ -37,25 +43,27 @@ function getThemesDir(): string {
     if (parent === dir) break;
     dir = parent;
   }
-  return join(process.cwd(), "personas", "themes");
+  // Check cwd as last resort
+  const cwdCandidate = join(process.cwd(), "personas", "themes");
+  if (existsSync(cwdCandidate)) return cwdCandidate;
+  return null;
 }
 
 export function listThemes(): string[] {
   const dir = getThemesDir();
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".yaml"))
-    .map((f) => f.replace(/\.yaml$/, ""))
-    .sort();
+  if (dir && existsSync(dir)) {
+    return readdirSync(dir)
+      .filter((f) => f.endsWith(".yaml"))
+      .map((f) => f.replace(/\.yaml$/, ""))
+      .sort();
+  }
+  // Fall back to embedded themes
+  return Object.keys(EMBEDDED_THEMES).sort();
 }
 
-export function loadTheme(slug: string): PersonaTheme | null {
-  const dir = getThemesDir();
-  const filePath = join(dir, `${slug}.yaml`);
-  if (!existsSync(filePath)) return null;
-
+function parseThemeYaml(slug: string, yaml: string): PersonaTheme | null {
   try {
-    const raw = parseYaml(readFileSync(filePath, "utf-8"));
+    const raw = parseYaml(yaml);
     if (!raw || typeof raw !== "object") return null;
 
     return {
@@ -72,6 +80,25 @@ export function loadTheme(slug: string): PersonaTheme | null {
   } catch {
     return null;
   }
+}
+
+export function loadTheme(slug: string): PersonaTheme | null {
+  // Try filesystem first
+  const dir = getThemesDir();
+  if (dir) {
+    const filePath = join(dir, `${slug}.yaml`);
+    if (existsSync(filePath)) {
+      return parseThemeYaml(slug, readFileSync(filePath, "utf-8"));
+    }
+  }
+
+  // Fall back to embedded themes
+  const embedded = EMBEDDED_THEMES[slug];
+  if (embedded) {
+    return parseThemeYaml(slug, embedded);
+  }
+
+  return null;
 }
 
 export function getAgent(theme: PersonaTheme, role: string): PersonaAgent | null {

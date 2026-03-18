@@ -94,9 +94,41 @@ export function getConfigPaths(): { defaults: string; global: string; local: str
   };
 }
 
+// Hardcoded defaults — must match config/defaults.toml
+// Embedded here so the compiled binary doesn't need filesystem access
+const BUILTIN_DEFAULTS: Record<string, unknown> = {
+  session: {
+    model: "claude-sonnet-4-6",
+    max_tokens: 16384,
+  },
+  persona: {
+    theme: "hitchhikers-guide",
+    role: "dev",
+    immersion: "high",
+  },
+  statusline: {
+    enabled: true,
+    git_info: true,
+    context_bar: true,
+  },
+  telemetry: {
+    enabled: false,
+    otel_endpoint: "",
+  },
+  tmux: {
+    layout: "bottom",
+    socket: "ac",
+  },
+};
+
 function findProjectRoot(): string {
   // Walk up from this file to find the repo root (where config/ lives)
-  let dir = new URL(".", import.meta.url).pathname;
+  let dir: string;
+  try {
+    dir = new URL(".", import.meta.url).pathname;
+  } catch {
+    return process.cwd();
+  }
   for (let i = 0; i < 10; i++) {
     if (existsSync(join(dir, "config", "defaults.toml"))) return dir;
     const parent = join(dir, "..");
@@ -109,8 +141,12 @@ function findProjectRoot(): string {
 export function loadConfig(overrides?: Partial<AclaudeConfig>): AclaudeConfig {
   const paths = getConfigPaths();
 
-  // Layer 1: defaults
-  let config = loadToml(paths.defaults);
+  // Layer 1: defaults (embedded, with filesystem overlay if available)
+  let config = { ...BUILTIN_DEFAULTS };
+  const fileDefaults = loadToml(paths.defaults);
+  if (Object.keys(fileDefaults).length > 0) {
+    config = deepMerge(config, fileDefaults) as Record<string, unknown>;
+  }
 
   // Layer 2: global
   config = deepMerge(config, loadToml(paths.global));
