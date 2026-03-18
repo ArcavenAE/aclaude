@@ -130,6 +130,7 @@ export async function startSession(
             systemPrompt,
             model: config.session.model,
             ...(sessionId && { resume: sessionId }),
+            settingSources: ["project", "user", "local"],
             includePartialMessages: true,
             permissionMode: "default",
             hooks: hooks.buildHooksConfig(),
