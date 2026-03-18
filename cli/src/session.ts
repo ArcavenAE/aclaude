@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk/entrypoints/sdk/coreTypes.js";
 import { createInterface } from "node:readline";
+import { execSync } from "node:child_process";
 import type { AclaudeConfig } from "./config.js";
 import type { PersonaAgent, PersonaTheme } from "./persona.js";
 import { buildSystemPrompt } from "./persona.js";
@@ -92,6 +93,17 @@ export async function startSession(
     console.log("");
   }
 
+  // Locate claude executable — required when running from a compiled binary
+  // where the SDK can't resolve it from import.meta.url
+  let claudePath: string | undefined;
+  try {
+    claudePath = execSync("which claude", { encoding: "utf-8" }).trim();
+  } catch {
+    console.error("Error: Claude Code CLI (claude) not found in PATH.");
+    console.error("Install it from: https://docs.anthropic.com/en/docs/claude-code");
+    process.exit(1);
+  }
+
   console.log("Starting session (via Claude Code)...");
   if (characterName) {
     console.log(`Persona: ${agent!.character} (${theme!.name})`);
@@ -130,6 +142,7 @@ export async function startSession(
             systemPrompt,
             model: config.session.model,
             ...(sessionId && { resume: sessionId }),
+            ...(claudePath && { pathToClaudeCodeExecutable: claudePath }),
             settingSources: ["project", "user", "local"],
             includePartialMessages: true,
             permissionMode: "default",
