@@ -1,6 +1,6 @@
 # Stable Release
 # Triggers: tag push matching v*
-# Builds binaries, signs, creates GitHub release, updates homebrew-tap
+# Builds binaries, signs/notarizes, creates GitHub release, updates homebrew-tap
 name: Release
 
 on:
@@ -45,6 +45,9 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -53,6 +56,13 @@ jobs:
 
       - name: Install dependencies
         run: cd cli && bun install
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Build binary
         run: |
@@ -70,37 +80,47 @@ jobs:
           name: binaries-${{ matrix.os }}-${{ matrix.arch }}
           path: cli/aclaude-${{ matrix.os }}-${{ matrix.arch }}
 
-  sign:
-    name: Sign & Notarize (macOS)
+  sign-and-notarize:
+    name: Sign & Notarize
     needs: build
     if: vars.SIGNING_ENABLED == 'true'
+    environment: release
     strategy:
       matrix:
         arch: [arm64, amd64]
     runs-on: macos-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
         with:
           name: binaries-darwin-${{ matrix.arch }}
 
-      - name: Import signing certificate
+      - name: Import certificates
         env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_INSTALLER_CERTIFICATE_P12: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12 }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
         run: |
-          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
 
-          echo -n "$APPLE_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: \
-            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > cert.p12
+          security import cert.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm cert.p12
+
+          echo "$APPLE_INSTALLER_CERTIFICATE_P12" | base64 --decode > installer-cert.p12
+          security import installer-cert.p12 -k build.keychain -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" -T /usr/bin/pkgbuild -T /usr/bin/productbuild -T /usr/bin/productsign
+          rm installer-cert.p12
+
+          curl -sfo /tmp/DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security add-certificates -k build.keychain /tmp/DeveloperIDG2CA.cer
+          rm /tmp/DeveloperIDG2CA.cer
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
       - name: Sign binary
         env:
@@ -109,49 +129,97 @@ jobs:
           codesign --force --options runtime \
             --sign "$APPLE_SIGNING_IDENTITY" \
             --timestamp \
-            "aclaude-darwin-${{ matrix.arch }}"
+            aclaude-darwin-${{ matrix.arch }}
 
-      - name: Notarize binary
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      - name: Verify signature
+        run: codesign --verify --deep --strict aclaude-darwin-${{ matrix.arch }}
+
+      - name: Build app bundle
         run: |
-          zip "aclaude-darwin-${{ matrix.arch }}.zip" "aclaude-darwin-${{ matrix.arch }}"
-          xcrun notarytool submit "aclaude-darwin-${{ matrix.arch }}.zip" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --wait
-          xcrun stapler staple "aclaude-darwin-${{ matrix.arch }}" || true
+          VERSION="${{ needs.build.outputs.version }}"
+          chmod +x scripts/create-app.sh
+          ./scripts/create-app.sh aclaude-darwin-${{ matrix.arch }} "$VERSION" .
+          mv Aclaude.app Aclaude-${{ matrix.arch }}.app
 
-      - name: Upload signed artifact
+      - name: Sign app bundle
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --deep --options runtime \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            --timestamp \
+            Aclaude-${{ matrix.arch }}.app
+
+      - name: Build dmg
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          chmod +x scripts/create-dmg.sh
+          ./scripts/create-dmg.sh Aclaude-${{ matrix.arch }}.app "$VERSION" aclaude-${{ matrix.arch }}.dmg
+
+      - name: Build pkg
+        env:
+          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
+        run: |
+          if ! security find-identity -v build.keychain | grep -q "$APPLE_INSTALLER_IDENTITY"; then
+            echo "::error::APPLE_INSTALLER_IDENTITY not found in keychain"
+            security find-identity -v build.keychain
+            exit 1
+          fi
+
+          VERSION="${{ needs.build.outputs.version }}"
+          chmod +x scripts/create-pkg.sh
+          ./scripts/create-pkg.sh aclaude-darwin-${{ matrix.arch }} "$VERSION" "$APPLE_INSTALLER_IDENTITY" aclaude-${{ matrix.arch }}.pkg
+
+      - name: Notarize and staple
+        env:
+          APPLE_NOTARIZATION_APPLE_ID: ${{ secrets.APPLE_NOTARIZATION_APPLE_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          APPLE_NOTARIZATION_TEAM_ID: ${{ secrets.APPLE_NOTARIZATION_TEAM_ID }}
+        run: |
+          for ARTIFACT in aclaude-${{ matrix.arch }}.pkg aclaude-${{ matrix.arch }}.dmg; do
+            echo "Notarizing $ARTIFACT..."
+            xcrun notarytool submit "$ARTIFACT" \
+              --apple-id "$APPLE_NOTARIZATION_APPLE_ID" \
+              --password "$APPLE_NOTARIZATION_PASSWORD" \
+              --team-id "$APPLE_NOTARIZATION_TEAM_ID" \
+              --wait --timeout 14400
+            xcrun stapler staple "$ARTIFACT"
+          done
+
+      - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
           name: signed-binaries-darwin-${{ matrix.arch }}
-          path: aclaude-darwin-${{ matrix.arch }}
+          path: |
+            aclaude-darwin-${{ matrix.arch }}
+            aclaude-${{ matrix.arch }}.pkg
+            aclaude-${{ matrix.arch }}.dmg
+          retention-days: 14
+
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain build.keychain || true
 
   release:
     name: Create Release
-    needs: [build, sign]
+    needs: [build, sign-and-notarize]
     if: |
       always() &&
       needs.build.result == 'success' &&
-      (needs.sign.result == 'success' || needs.sign.result == 'skipped')
+      (needs.sign-and-notarize.result == 'success' || needs.sign-and-notarize.result == 'skipped')
+    environment: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Download macOS arm64
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.sign.result == 'success' && 'signed-binaries-darwin-arm64' || 'binaries-darwin-arm64' }}
+          name: ${{ needs.sign-and-notarize.result == 'success' && 'signed-binaries-darwin-arm64' || 'binaries-darwin-arm64' }}
           path: dist/
 
       - name: Download macOS amd64
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.sign.result == 'success' && 'signed-binaries-darwin-amd64' || 'binaries-darwin-amd64' }}
+          name: ${{ needs.sign-and-notarize.result == 'success' && 'signed-binaries-darwin-amd64' || 'binaries-darwin-amd64' }}
           path: dist/
 
       - name: Download Linux amd64
@@ -166,99 +234,60 @@ jobs:
           name: binaries-linux-arm64
           path: dist/
 
+      - name: List release files
+        run: ls -la dist/
+
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          gh release create "${{ github.ref_name }}" \
+          VERSION="${{ needs.build.outputs.version }}"
+          TAG="${{ needs.build.outputs.tag }}"
+          gh release create "$TAG" \
             --repo "${{ github.repository }}" \
             --title "v${VERSION}" \
             --generate-notes \
             dist/*
 
-  update-tap:
+  update-homebrew:
     name: Update Homebrew Tap
-    needs: release
+    needs: [build, release]
+    if: needs.release.result == 'success'
+    environment: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - name: Download signed binaries
+        uses: actions/download-artifact@v4
         with:
           pattern: "*binaries-*"
           path: dist/
           merge-multiple: true
 
-      - name: Generate formula
-        run: |
-          TAG="${{ github.ref_name }}"
-          VERSION="${TAG#v}"
-
-          sha256_darwin_arm64=$(sha256sum dist/aclaude-darwin-arm64 | cut -d' ' -f1)
-          sha256_darwin_amd64=$(sha256sum dist/aclaude-darwin-amd64 | cut -d' ' -f1)
-          sha256_linux_arm64=$(sha256sum dist/aclaude-linux-arm64 | cut -d' ' -f1)
-          sha256_linux_amd64=$(sha256sum dist/aclaude-linux-amd64 | cut -d' ' -f1)
-
-          cat > aclaude.rb << 'FORMULA_START'
-          class Aclaude < Formula
-            desc "BYOA agent CLI with persona theming"
-            homepage "https://github.com/arcaven/aclaude"
-          FORMULA_START
-
-          cat >> aclaude.rb << FORMULA_VERSIONS
-            version "${VERSION}"
-            license "MIT"
-
-            if Hardware::CPU.arm?
-              url "https://github.com/arcaven/aclaude/releases/download/${TAG}/aclaude-darwin-arm64"
-              sha256 "${sha256_darwin_arm64}"
-            else
-              url "https://github.com/arcaven/aclaude/releases/download/${TAG}/aclaude-darwin-amd64"
-              sha256 "${sha256_darwin_amd64}"
-            end
-
-            on_linux do
-              if Hardware::CPU.arm?
-                url "https://github.com/arcaven/aclaude/releases/download/${TAG}/aclaude-linux-arm64"
-                sha256 "${sha256_linux_arm64}"
-              else
-                url "https://github.com/arcaven/aclaude/releases/download/${TAG}/aclaude-linux-amd64"
-                sha256 "${sha256_linux_amd64}"
-              end
-            end
-          FORMULA_VERSIONS
-
-          cat >> aclaude.rb << 'FORMULA_END'
-
-            def install
-              cpu = Hardware::CPU.arm? ? "arm64" : "amd64"
-              os = OS.mac? ? "darwin" : "linux"
-              binary = "aclaude-#{os}-#{cpu}"
-              bin.install binary => "aclaude"
-            end
-
-            def caveats
-              <<~EOS
-                aclaude requires Claude Code CLI (claude) to be installed.
-                See: https://docs.anthropic.com/en/docs/claude-code
-              EOS
-            end
-
-            test do
-              assert_match "aclaude", shell_output("#{bin}/aclaude --version 2>&1")
-            end
-          end
-          FORMULA_END
-
-      - name: Push to homebrew-tap
+      - name: Update Homebrew formula
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/arcaven/homebrew-tap.git" tap
-          mkdir -p tap/Formula
-          cp aclaude.rb tap/Formula/aclaude.rb
-          cd tap
+          VERSION="${{ needs.build.outputs.version }}"
+          TAG="${{ needs.build.outputs.tag }}"
+
+          SHA256_ARM64=$(shasum -a 256 dist/aclaude-darwin-arm64 | cut -d' ' -f1)
+          SHA256_AMD64=$(shasum -a 256 dist/aclaude-darwin-amd64 | cut -d' ' -f1)
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/arcaven/homebrew-tap.git" homebrew-tap-repo
+          cd homebrew-tap-repo
+
+          mkdir -p Formula
+          cp ../Formula/aclaude.rb Formula/aclaude.rb
+
+          sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" Formula/aclaude.rb
+          sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/aclaude.rb
+          sed -i "s/SHA256_ARM64_PLACEHOLDER/$SHA256_ARM64/g" Formula/aclaude.rb
+          sed -i "s/SHA256_AMD64_PLACEHOLDER/$SHA256_AMD64/g" Formula/aclaude.rb
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/aclaude.rb
-          git diff --cached --quiet || git commit -m "update aclaude formula to ${GITHUB_REF_NAME}"
+          git diff --cached --quiet || git commit -m "Update aclaude to v${VERSION}"
           git push
