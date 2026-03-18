@@ -5,11 +5,10 @@
 class Aclaude < Formula
   desc "Opinionated wrapper for Claude Code with persona theming"
   homepage "https://github.com/arcaven/aclaude"
-  version "VERSION_PLACEHOLDER"
-  license "MIT"
-
   url "https://github.com/arcaven/aclaude/releases/download/TAG_PLACEHOLDER/aclaude-darwin-arm64"
   sha256 "SHA256_ARM64_PLACEHOLDER"
+  version "VERSION_PLACEHOLDER"
+  license "MIT"
 
   def install
     bin.install "aclaude-darwin-arm64" => "aclaude"
