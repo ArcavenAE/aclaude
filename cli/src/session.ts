@@ -64,10 +64,15 @@ export async function startSession(
   theme: PersonaTheme | null,
   agent: PersonaAgent | null,
 ): Promise<void> {
-  const systemPrompt =
-    theme && agent
-      ? buildSystemPrompt(theme, agent, config.persona.immersion)
-      : "You are a helpful software engineering assistant.";
+  // Use Claude Code's default system prompt as the base, append persona on top.
+  // This preserves all built-in tool instructions, safety guidelines, and capabilities.
+  const personaPrompt = theme && agent
+    ? buildSystemPrompt(theme, agent, config.persona.immersion)
+    : "";
+
+  const systemPrompt: string | { type: "preset"; preset: "claude_code"; append?: string } = personaPrompt
+    ? { type: "preset", preset: "claude_code", append: personaPrompt }
+    : { type: "preset", preset: "claude_code" };
 
   const characterName = agent?.shortName || agent?.character || undefined;
 
@@ -133,6 +138,16 @@ export async function startSession(
 
       if (input.trim() === "/usage") {
         printUsageSummary(cumulativeUsage, hooks);
+        continue;
+      }
+
+      if (input.trim() === "/help") {
+        console.log("aclaude commands:");
+        console.log("  /usage    — show session token usage and tool stats");
+        console.log("  /quit     — end session");
+        console.log("");
+        console.log("All Claude Code slash commands (e.g. /compact, /clear, /model)");
+        console.log("are passed through to Claude Code.");
         continue;
       }
 

@@ -258,7 +258,7 @@ export function buildSystemPrompt(
   immersion: "high" | "medium" | "low" | "none",
 ): string {
   if (immersion === "none") {
-    return "You are a helpful software engineering assistant.";
+    return "";
   }
 
   const parts: string[] = [];
@@ -284,9 +284,6 @@ export function buildSystemPrompt(
     parts.push(`You are a helpful software engineering assistant with the personality of ${agent.character}.`);
     parts.push(`Expertise: ${agent.expertise}`);
   }
-
-  parts.push("");
-  parts.push("You are a software engineering assistant. Help the user with their coding tasks.");
 
   return parts.join("\n");
 }
