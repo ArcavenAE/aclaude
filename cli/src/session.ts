@@ -87,6 +87,7 @@ export async function startSession(
 
   let sessionId: string | undefined;
   let cumulativeUsage: Partial<SessionUsage> = {};
+  let lastKnownPct: number | null = null;
 
   // Auth info: note when using Claude Code's inherited auth
   const hasApiKey = !!(process.env.ANTHROPIC_API_KEY ||
@@ -212,11 +213,13 @@ export async function startSession(
 
         process.stdout.write("\n\n");
 
-        // Update statusline
+        // Update statusline — preserve last known context pct
         const pct = computeContextPct(cumulativeUsage);
-        const sl = renderStatusline(config, { characterName, contextPct: pct });
+        if (pct !== null) lastKnownPct = pct;
+        const displayPct = pct ?? lastKnownPct;
+        const sl = renderStatusline(config, { characterName, contextPct: displayPct });
         if (sl) console.log(sl);
-        writeTmuxCache(config, { contextPct: pct });
+        writeTmuxCache(config, { contextPct: displayPct });
       });
       } catch (err) {
         process.stdout.write("\n");
@@ -225,6 +228,9 @@ export async function startSession(
           break;
         }
         console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        // Show statusline even after errors
+        const sl = renderStatusline(config, { characterName, contextPct: lastKnownPct });
+        if (sl) console.log(sl);
       }
     }
   } finally {
