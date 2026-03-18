@@ -9,15 +9,14 @@ aclaude is the A in BYOA — an experiment in determining what features are usef
 Requires: [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`).
 
 ```sh
-# curl (stable)
-curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | sh
-
 # curl (alpha — updates on every push to main)
 curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | sh -s -- --alpha
 
-# Homebrew
-brew install arcaven/tap/aclaude
+# Homebrew (alpha)
+brew install arcaven/tap/aclaude-a
 ```
+
+Stable channel (`aclaude` / `arcaven/tap/aclaude`) will be available once a tagged release is cut. Until then, use the alpha channel — it tracks main and is signed and notarized.
 
 ## Usage
 
