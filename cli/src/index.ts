@@ -64,8 +64,10 @@ configCmd
   .command("path")
   .description("Print config file locations")
   .action(() => {
+    const { existsSync } = require("node:fs");
     const paths = getConfigPaths();
-    console.log(`Defaults:  ${paths.defaults}`);
+    const defaultsExists = existsSync(paths.defaults);
+    console.log(`Defaults:  ${defaultsExists ? paths.defaults : "(embedded in binary)"}`);
     console.log(`Global:    ${paths.global}`);
     console.log(`Local:     ${paths.local}`);
   });

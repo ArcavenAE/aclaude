@@ -3,8 +3,8 @@ model = "claude-sonnet-4-6"
 max_tokens = 16384
 
 [persona]
-theme = "hitchhikers-guide"
-role = "dev"
+theme = "the-expanse"
+role = "naomi"
 immersion = "high"  # high | medium | low | none
 
 [statusline]

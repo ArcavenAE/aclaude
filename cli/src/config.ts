@@ -102,8 +102,8 @@ const BUILTIN_DEFAULTS: Record<string, unknown> = {
     max_tokens: 16384,
   },
   persona: {
-    theme: "hitchhikers-guide",
-    role: "dev",
+    theme: "the-expanse",
+    role: "naomi",
     immersion: "high",
   },
   statusline: {

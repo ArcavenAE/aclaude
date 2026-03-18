@@ -37,10 +37,21 @@ const RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO
 /**
  * Detect channel from the binary name.
  * If the executable is named "aclaude-a", we're on the alpha channel.
+ * process.argv is unreliable in bun compile (virtual FS path).
+ * Fall back to process.env._ (shell sets this to the invoked command).
  */
 export function getChannel(): Channel {
-  const binName = basename(process.argv[1] || "aclaude");
-  return binName.includes("aclaude-a") ? "alpha" : "stable";
+  // Check argv first (works in dev/node mode)
+  const argvName = basename(process.argv[1] || "");
+  if (argvName.includes("aclaude-a")) return "alpha";
+  if (argvName === "aclaude") return "stable";
+
+  // Bun compile: check $_ which contains the invoked command name
+  const invokedAs = basename(process.env._ || "");
+  if (invokedAs.includes("aclaude-a")) return "alpha";
+  if (invokedAs.includes("aclaude")) return "stable";
+
+  return "stable";
 }
 
 /**
