@@ -116,6 +116,51 @@ persona prompt included "You are a software engineering assistant"
 as a poor substitute for Claude Code's full system prompt. The preset
 approach is the correct architecture for any wrapper.
 
+## Findings from end-to-end testing (2026-03-18)
+
+### TUI-specific commands don't produce output via SDK
+
+Claude Code's `/stats` renders a visual panel in its terminal UI. Through
+the SDK, the output comes as a text message stream — TUI-specific commands
+produce no visible output. `/stats` returns empty. Same likely applies to
+other visual commands. The SDK surfaces text and tool events, not terminal
+renders.
+
+Affected commands (suspected): `/stats`, possibly `/model` display,
+any command that renders a panel or dialog rather than text output.
+
+Commands that work via SDK: `/compact`, `/clear`, and any command that
+produces text output or triggers tool use rather than visual rendering.
+
+### Inline shell input vs Claude Code's pinned TUI
+
+Claude Code pins a text input box ~5 lines from the bottom of the terminal,
+with bordered panels, a statusline below, and output scrolling above the
+input. This is the proprietary CLI's terminal rendering — the SDK provides
+a message stream, not a terminal UI.
+
+aclaude uses Node.js `readline` — traditional shell-style inline input
+where prompts and responses are mixed sequentially. This works but feels
+less polished than Claude Code's TUI. It's the most visible UX difference
+between aclaude and vanilla Claude Code.
+
+Building a custom TUI (e.g. with ink, blessed, or raw ANSI) is feasible
+and could differentiate aclaude — our TUI could include context bars,
+persona info, portrait display, and other things Claude Code doesn't show.
+This is a future probe, not a distribution-blocking gap.
+
+### Session works end-to-end
+
+With the fixes applied (settingSources, preset system prompt, executable
+path, embedded themes/defaults), a full session works:
+- CLAUDE.md, SOUL.md, rules all load
+- Memory and skills are available
+- Persona theming active (Trillian/Hitchhiker's Guide)
+- Claude Code slash commands pass through
+- Token usage tracking works
+- Context window percentage updates in statusline
+- Error handling catches SDK failures without crashing
+
 ## References
 
 - Agent SDK types: `node_modules/@anthropic-ai/claude-agent-sdk/entrypoints/sdk/`
