@@ -11,6 +11,10 @@ on:
       - 'docs/**'
       - 'LICENSE'
       - 'CREDITS.md'
+      - '.gitignore'
+      - 'sources.toml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-verify.yml'
   pull_request:
     branches: [main]
 
