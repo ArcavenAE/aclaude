@@ -28,10 +28,10 @@ program
   .action(async (opts) => {
     const overrides: Record<string, unknown> = {};
     if (opts.model) overrides.session = { model: opts.model };
-    if (opts.theme || opts.agent || opts.immersion) {
+    if (opts.theme || opts.role || opts.immersion) {
       overrides.persona = {
         ...(opts.theme && { theme: opts.theme }),
-        ...(opts.agent && { role: opts.agent }),
+        ...(opts.role && { role: opts.role }),
         ...(opts.immersion && { immersion: opts.immersion }),
       };
     }

@@ -97,8 +97,11 @@ export async function startSession(
   // where the SDK can't resolve it from import.meta.url
   let claudePath: string | undefined;
   try {
-    claudePath = execSync("which claude", { encoding: "utf-8" }).trim();
+    claudePath = execSync("command -v claude", { encoding: "utf-8", shell: "/bin/sh" }).trim();
   } catch {
+    // not found
+  }
+  if (!claudePath) {
     console.error("Error: Claude Code CLI (claude) not found in PATH.");
     console.error("Install it from: https://docs.anthropic.com/en/docs/claude-code");
     process.exit(1);
@@ -133,6 +136,7 @@ export async function startSession(
         continue;
       }
 
+      try {
       await traceSpanAsync("message", async () => {
         process.stdout.write("\n");
 
@@ -199,6 +203,14 @@ export async function startSession(
         if (sl) console.log(sl);
         writeTmuxCache(config, { contextPct: pct });
       });
+      } catch (err) {
+        process.stdout.write("\n");
+        if (err instanceof ReferenceError && String(err).includes("Claude Code executable")) {
+          console.error(`Error: ${err.message}`);
+          break;
+        }
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   } finally {
     rl.close();
