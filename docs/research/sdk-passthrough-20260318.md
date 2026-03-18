@@ -91,13 +91,13 @@ The SDK is designed for this pattern — it's a wrapper API, not a fork.
 The subprocess is real Claude Code running with real tools. aclaude's
 value is in the configuration, theming, and operational layer around it.
 
-## systemPrompt architecture question
+## systemPrompt architecture — RESOLVED
 
-Current approach: aclaude replaces the system prompt entirely with the
-persona prompt. This means Claude Code's built-in system prompt (which
-includes tool instructions, safety guidelines, etc.) is overridden.
+**Problem:** aclaude was replacing Claude Code's entire system prompt
+with the persona prompt. This lost all built-in tool instructions,
+safety guidelines, and capabilities. Users got a worse Claude Code.
 
-Better approach: use the SDK's preset system prompt with append:
+**Fix:** use the SDK's preset system prompt with append:
 ```typescript
 systemPrompt: {
   type: 'preset',
@@ -106,10 +106,15 @@ systemPrompt: {
 }
 ```
 
-This layers the persona on top of Claude Code's own prompt rather than
-replacing it. Needs investigation: does the preset prompt include
-everything Claude Code normally uses? Does appending work well with
-persona instructions?
+This layers the persona on top of Claude Code's own prompt. The user
+gets everything vanilla Claude Code provides, plus the persona theming.
+With immersion "none", the preset is used with no append — identical
+to vanilla Claude Code.
+
+**Finding:** this was silently degrading aclaude from day one. The
+persona prompt included "You are a software engineering assistant"
+as a poor substitute for Claude Code's full system prompt. The preset
+approach is the correct architecture for any wrapper.
 
 ## References
 
