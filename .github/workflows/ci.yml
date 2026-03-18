@@ -341,7 +341,6 @@ jobs:
           sed -i "s/VERSION_PLACEHOLDER/$TAG/g" Formula/aclaude-a.rb
           sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/aclaude-a.rb
           sed -i "s/SHA256_ARM64_PLACEHOLDER/$SHA256_ARM64/g" Formula/aclaude-a.rb
-          sed -i "s/SHA256_AMD64_PLACEHOLDER/$SHA256_AMD64/g" Formula/aclaude-a.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

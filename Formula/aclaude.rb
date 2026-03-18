@@ -1,5 +1,6 @@
 # Homebrew formula for aclaude (stable channel)
 # Updated automatically by CI on tagged releases (v*)
+# macOS only (arm64). Linux users: use install.sh or build from source.
 
 class Aclaude < Formula
   desc "Opinionated wrapper for Claude Code with persona theming"
@@ -7,26 +8,11 @@ class Aclaude < Formula
   version "VERSION_PLACEHOLDER"
   license "MIT"
 
-  on_macos do
-    url "https://github.com/arcaven/aclaude/releases/download/TAG_PLACEHOLDER/aclaude-darwin-arm64"
-    sha256 "SHA256_ARM64_PLACEHOLDER"
-  end
-
-  on_linux do
-    if Hardware::CPU.arm?
-      url "https://github.com/arcaven/aclaude/releases/download/TAG_PLACEHOLDER/aclaude-linux-arm64"
-      sha256 "SHA256_LINUX_ARM64_PLACEHOLDER"
-    else
-      url "https://github.com/arcaven/aclaude/releases/download/TAG_PLACEHOLDER/aclaude-linux-amd64"
-      sha256 "SHA256_LINUX_AMD64_PLACEHOLDER"
-    end
-  end
+  url "https://github.com/arcaven/aclaude/releases/download/TAG_PLACEHOLDER/aclaude-darwin-arm64"
+  sha256 "SHA256_ARM64_PLACEHOLDER"
 
   def install
-    cpu = Hardware::CPU.arm? ? "arm64" : "amd64"
-    os = OS.mac? ? "darwin" : "linux"
-    binary = "aclaude-#{os}-#{cpu}"
-    bin.install binary => "aclaude"
+    bin.install "aclaude-darwin-arm64" => "aclaude"
   end
 
   def caveats
