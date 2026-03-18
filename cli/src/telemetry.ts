@@ -2,8 +2,8 @@ import type { TelemetryConfig } from "./config.js";
 
 let initialized = false;
 
-export function initTelemetry(config: TelemetryConfig): void {
-  if (!config.enabled || initialized) return;
+export function initTelemetry(config?: TelemetryConfig): void {
+  if (!config?.enabled || initialized) return;
 
   // OTEL stub — when enabled, would initialize @opentelemetry/sdk-node
   // with OTLP exporter pointing at config.otel_endpoint.
