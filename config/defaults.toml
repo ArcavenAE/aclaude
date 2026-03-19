@@ -1,10 +1,10 @@
 [session]
 model = "claude-sonnet-4-6"
-max_tokens = 16384
+max_tokens = 200000
 
 [persona]
 theme = "the-expanse"
-role = "naomi"
+role = "dev"
 immersion = "high"  # high | medium | low | none
 
 [statusline]
