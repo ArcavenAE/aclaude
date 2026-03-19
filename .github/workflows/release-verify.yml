@@ -1,6 +1,6 @@
 # Release Verification
-# Triggers: after release workflow completes
-# Verifies that the homebrew-tap CI passed after formula push
+# Triggers: after CI or Release workflow completes successfully
+# Verifies the release is actually installable and the binary works
 name: Release Verify
 
 on:
@@ -9,38 +9,87 @@ on:
     types: [completed]
 
 jobs:
-  verify-tap:
-    name: Verify Homebrew Tap
+  verify-release:
+    name: Verify Release (${{ matrix.method }})
     if: github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - method: install-sh
+            runner: macos-latest
+          - method: brew
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
     steps:
-      - name: Check tap CI status
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Determine channel
+        id: channel
         run: |
-          echo "Checking homebrew-tap CI status..."
-
-          # Get the latest workflow run from the tap repo
-          RUNS=$(gh run list \
-            --repo arcaven/homebrew-tap \
-            --limit 1 \
-            --json status,conclusion,headBranch,createdAt \
-            2>/dev/null || echo "[]")
-
-          if [[ "$RUNS" == "[]" ]]; then
-            echo "No CI runs found in homebrew-tap (may not have CI configured)"
-            exit 0
-          fi
-
-          echo "Latest tap CI run:"
-          echo "$RUNS" | jq '.'
-
-          CONCLUSION=$(echo "$RUNS" | jq -r '.[0].conclusion // "pending"')
-
-          if [[ "$CONCLUSION" == "failure" ]]; then
-            echo "::warning::Homebrew tap CI failed. Check https://github.com/arcaven/homebrew-tap/actions"
-          elif [[ "$CONCLUSION" == "success" ]]; then
-            echo "Homebrew tap CI passed."
+          if [[ "${{ github.event.workflow_run.name }}" == "Release" ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "bin=aclaude" >> "$GITHUB_OUTPUT"
+            echo "tap=arcaven/tap/aclaude" >> "$GITHUB_OUTPUT"
           else
-            echo "Homebrew tap CI status: $CONCLUSION"
+            echo "channel=alpha" >> "$GITHUB_OUTPUT"
+            echo "bin=aclaude-a" >> "$GITHUB_OUTPUT"
+            echo "tap=arcaven/tap/aclaude-a" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify install.sh
+        if: matrix.method == 'install-sh'
+        run: |
+          BIN="${{ steps.channel.outputs.bin }}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
+
+          # Install via install.sh
+          if [[ "$CHANNEL" == "alpha" ]]; then
+            bash install.sh --alpha
+          else
+            bash install.sh
+          fi
+
+          # Verify binary exists and runs
+          if [[ ! -x "$HOME/.local/bin/$BIN" ]]; then
+            echo "::error::$BIN not found at ~/.local/bin/$BIN after install"
+            exit 1
+          fi
+
+          VERSION=$("$HOME/.local/bin/$BIN" --version)
+          echo "Installed version: $VERSION"
+
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::$BIN --version returned empty"
+            exit 1
+          fi
+
+          # Verify uninstall
+          bash install.sh --uninstall
+          if [[ -e "$HOME/.local/bin/$BIN" ]]; then
+            echo "::error::$BIN still exists after uninstall"
+            exit 1
+          fi
+
+          echo "install.sh: install, verify, uninstall — all passed"
+
+      - name: Verify brew
+        if: matrix.method == 'brew'
+        run: |
+          BIN="${{ steps.channel.outputs.bin }}"
+          TAP="${{ steps.channel.outputs.tap }}"
+
+          brew install "$TAP" || {
+            echo "::error::brew install $TAP failed"
+            exit 1
+          }
+
+          VERSION=$("$BIN" --version)
+          echo "Installed version: $VERSION"
+
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::$BIN --version returned empty"
+            exit 1
+          fi
+
+          brew uninstall "$BIN"
+          echo "brew: install, verify, uninstall — all passed"
