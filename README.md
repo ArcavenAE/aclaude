@@ -25,7 +25,9 @@ Stable channel (`aclaude` / `arcaven/tap/aclaude`) will be available once a tagg
 ```sh
 # curl-installed
 curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | bash -s -- --uninstall
+```
 
+```sh
 # Homebrew
 brew uninstall aclaude-a    # or aclaude for stable
 ```
