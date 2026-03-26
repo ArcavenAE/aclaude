@@ -22,7 +22,7 @@ jobs:
 
           # Get the latest workflow run from the tap repo
           RUNS=$(gh run list \
-            --repo arcaven/homebrew-tap \
+            --repo arcavenae/homebrew-tap \
             --limit 1 \
             --json status,conclusion,headBranch,createdAt \
             2>/dev/null || echo "[]")
@@ -38,7 +38,7 @@ jobs:
           CONCLUSION=$(echo "$RUNS" | jq -r '.[0].conclusion // "pending"')
 
           if [[ "$CONCLUSION" == "failure" ]]; then
-            echo "::warning::Homebrew tap CI failed. Check https://github.com/arcaven/homebrew-tap/actions"
+            echo "::warning::Homebrew tap CI failed. Check https://github.com/arcavenae/homebrew-tap/actions"
           elif [[ "$CONCLUSION" == "success" ]]; then
             echo "Homebrew tap CI passed."
           else

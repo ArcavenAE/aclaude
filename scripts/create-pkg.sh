@@ -27,7 +27,7 @@ cp "$BINARY_PATH" "$STAGING_DIR/usr/local/bin/aclaude"
 chmod +x "$STAGING_DIR/usr/local/bin/aclaude"
 
 pkgbuild --root "$STAGING_DIR" \
-  --identifier com.arcaven.aclaude \
+  --identifier com.arcavenae.aclaude \
   --version "$VERSION" \
   --install-location / \
   --sign "$SIGNING_IDENTITY" \

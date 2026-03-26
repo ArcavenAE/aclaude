@@ -2,15 +2,15 @@
 # aclaude installer — downloads the latest release from GitHub and installs it.
 #
 # Install:
-#   curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | bash -s -- --alpha
+#   curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --alpha
 #
 # Uninstall:
-#   curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | bash -s -- --uninstall
+#   curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --uninstall
 #
 set -euo pipefail
 
-GITHUB_OWNER="arcaven"
+GITHUB_OWNER="arcavenae"
 GITHUB_REPO="aclaude"
 INSTALL_DIR="$HOME/.local/share/aclaude"
 VERSIONS_DIR="$INSTALL_DIR/versions"
@@ -221,6 +221,6 @@ echo ""
 echo "Auth: uses your Claude Code credentials, or set ANTHROPIC_API_KEY."
 echo ""
 echo "To uninstall:"
-echo "  curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | bash -s -- --uninstall"
+echo "  curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --uninstall"
 echo ""
 echo "Run '${BIN_NAME} --version' to verify."

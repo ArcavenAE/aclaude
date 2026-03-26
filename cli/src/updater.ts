@@ -32,7 +32,7 @@ export interface UpdateResult {
   channel: Channel;
 }
 
-const GITHUB_OWNER = "arcaven";
+const GITHUB_OWNER = "arcavenae";
 const GITHUB_REPO = "aclaude";
 const RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
 

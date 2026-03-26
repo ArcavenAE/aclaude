@@ -2,7 +2,7 @@
 
 An opinionated [Claude Code](https://docs.anthropic.com/en/docs/claude-code) distribution. Wraps the Claude Code CLI with persona theming, configurable defaults, tmux session management and some additional features yet to be described here.
 
-aclaude is an exploration of features useful in Claude Code-like programs when used with systems like [marvel](https://github.com/arcaven/marvel) [switchboard](https://github.com/arcaven/switchboard) [specticle](https://github.com/arcaven/specticle) and an also an expression of preferences layered on top of the Claude Code foundation.
+aclaude is an exploration of features useful in Claude Code-like programs when used with systems like [marvel](https://github.com/arcavenae/marvel) [switchboard](https://github.com/arcavenae/switchboard) [specticle](https://github.com/arcavenae/specticle) and an also an expression of preferences layered on top of the Claude Code foundation.
 
 ## Install
 
@@ -10,21 +10,21 @@ Requires: [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`cl
 
 ```sh
 # curl (alpha — updates on every push to main)
-curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | bash -s -- --alpha
+curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --alpha
 ```
 
 ```sh
 # Homebrew (alpha)
-brew install arcaven/tap/aclaude-a
+brew install arcavenae/tap/aclaude-a
 ```
 
-Stable channel (`aclaude` / `arcaven/tap/aclaude`) will be available once a tagged release is cut. Until then, use the alpha channel — it tracks main and is signed and notarized.
+Stable channel (`aclaude` / `arcavenae/tap/aclaude`) will be available once a tagged release is cut. Until then, use the alpha channel — it tracks main and is signed and notarized.
 
 ### Uninstall
 
 ```sh
 # curl-installed
-curl -fsSL https://raw.githubusercontent.com/arcaven/aclaude/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --uninstall
 ```
 
 ```sh

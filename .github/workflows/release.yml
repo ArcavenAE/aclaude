@@ -276,7 +276,7 @@ jobs:
 
           SHA256_ARM64=$(shasum -a 256 dist/aclaude-darwin-arm64 | cut -d' ' -f1)
 
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/arcaven/homebrew-tap.git" homebrew-tap-repo
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/arcavenae/homebrew-tap.git" homebrew-tap-repo
           cd homebrew-tap-repo
 
           mkdir -p Formula

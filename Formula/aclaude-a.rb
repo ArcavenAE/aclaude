@@ -4,8 +4,8 @@
 
 class AclaudeA < Formula
   desc "Opinionated wrapper for Claude Code with persona theming (alpha channel)"
-  homepage "https://github.com/arcaven/aclaude"
-  url "https://github.com/arcaven/aclaude/releases/download/TAG_PLACEHOLDER/aclaude-a-darwin-arm64"
+  homepage "https://github.com/arcavenae/aclaude"
+  url "https://github.com/arcavenae/aclaude/releases/download/TAG_PLACEHOLDER/aclaude-a-darwin-arm64"
   version "VERSION_PLACEHOLDER"
   sha256 "SHA256_ARM64_PLACEHOLDER"
   license "MIT"
@@ -17,7 +17,7 @@ class AclaudeA < Formula
   def caveats
     <<~EOS
       aclaude-a is the alpha channel. Updates on every push to main.
-      For stable: brew install arcaven/tap/aclaude
+      For stable: brew install arcavenae/tap/aclaude
       Requires Claude Code CLI (claude).
     EOS
   end

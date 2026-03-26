@@ -160,13 +160,13 @@ dest = "personas/themes/"
 # [[source]]
 # name = "multiclaude-agents"
 # type = "agents"
-# from = "git:github.com/arcaven/multiclaude#main"
+# from = "git:github.com/arcavenae/multiclaude#main"
 # glob = "agents/*.yaml"
 # dest = "agents/"
 
 # [[source]]
 # name = "gastown-gates"
 # type = "gates"
-# from = "git:github.com/arcaven/gastown#main"
+# from = "git:github.com/arcavenae/gastown#main"
 # glob = "gates/*.yaml"
 # dest = "gates/"
