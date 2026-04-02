@@ -25,7 +25,8 @@ pub fn find_claude() -> Result<String> {
 ///
 /// Spawns `claude` with inherited stdio so the user gets the full Claude Code
 /// TUI experience. The persona system prompt is injected via --append-system-prompt.
-pub fn start_session(config: &AclaudeConfig) -> Result<()> {
+/// Any extra `claude_args` are passed through directly to the claude CLI.
+pub fn start_session(config: &AclaudeConfig, claude_args: &[String]) -> Result<()> {
     let claude_path = find_claude()?;
 
     let system_prompt = {
@@ -42,6 +43,11 @@ pub fn start_session(config: &AclaudeConfig) -> Result<()> {
 
     if !system_prompt.is_empty() {
         cmd.args(["--append-system-prompt", &system_prompt]);
+    }
+
+    // Pass through any additional claude CLI arguments
+    if !claude_args.is_empty() {
+        cmd.args(claude_args);
     }
 
     let status = cmd.status().map_err(|e| AclaudeError::Session {
@@ -65,7 +71,10 @@ pub fn start_session(config: &AclaudeConfig) -> Result<()> {
 /// Spawns `claude` with structured JSON I/O for programmatic access to
 /// token usage, tool invocations, and session metadata. Used for agent
 /// mode and non-interactive automation.
-pub fn start_streaming_session(config: &AclaudeConfig) -> Result<SessionUsage> {
+pub fn start_streaming_session(
+    config: &AclaudeConfig,
+    claude_args: &[String],
+) -> Result<SessionUsage> {
     let claude_path = find_claude()?;
 
     let system_prompt = {
@@ -85,6 +94,10 @@ pub fn start_streaming_session(config: &AclaudeConfig) -> Result<SessionUsage> {
 
     if !system_prompt.is_empty() {
         cmd.args(["--append-system-prompt", &system_prompt]);
+    }
+
+    if !claude_args.is_empty() {
+        cmd.args(claude_args);
     }
 
     let mut child = cmd.spawn().map_err(|e| AclaudeError::Session {
@@ -168,7 +181,7 @@ pub fn start_streaming_session(config: &AclaudeConfig) -> Result<SessionUsage> {
 }
 
 /// Run a one-shot prompt (non-interactive).
-pub fn run_prompt(config: &AclaudeConfig, prompt: &str) -> Result<String> {
+pub fn run_prompt(config: &AclaudeConfig, prompt: &str, claude_args: &[String]) -> Result<String> {
     let claude_path = find_claude()?;
 
     let system_prompt = {
@@ -184,6 +197,10 @@ pub fn run_prompt(config: &AclaudeConfig, prompt: &str) -> Result<String> {
 
     if !system_prompt.is_empty() {
         cmd.args(["--append-system-prompt", &system_prompt]);
+    }
+
+    if !claude_args.is_empty() {
+        cmd.args(claude_args);
     }
 
     let output = cmd.output().map_err(|e| AclaudeError::Session {

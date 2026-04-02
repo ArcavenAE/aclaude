@@ -46,6 +46,10 @@ struct Cli {
     /// Use NDJSON streaming protocol (agent/programmatic mode)
     #[arg(long)]
     streaming: bool,
+
+    /// Arguments passed through to the claude CLI (after --)
+    #[arg(last = true)]
+    claude_args: Vec<String>,
 }
 
 #[derive(Subcommand)]
@@ -148,15 +152,15 @@ fn main() -> anyhow::Result<()> {
             let cfg = config::load_config(cli_overrides)?;
             if let Some(prompt) = &cli.prompt {
                 // One-shot prompt mode
-                let result = session::run_prompt(&cfg, prompt)?;
+                let result = session::run_prompt(&cfg, prompt, &cli.claude_args)?;
                 print!("{result}");
             } else if cli.streaming {
                 // NDJSON streaming protocol (agent/programmatic mode)
-                let usage = session::start_streaming_session(&cfg)?;
+                let usage = session::start_streaming_session(&cfg, &cli.claude_args)?;
                 usage.print_summary();
             } else {
                 // Default: interactive TUI session
-                session::start_session(&cfg)?;
+                session::start_session(&cfg, &cli.claude_args)?;
             }
         }
 
