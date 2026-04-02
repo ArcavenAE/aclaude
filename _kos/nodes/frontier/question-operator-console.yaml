@@ -1,0 +1,56 @@
+id: question-operator-console
+type: question
+confidence: frontier
+title: "aclaude as operator console over headless Claude Code"
+content: |
+  Claude Code CLI runs headless as a data source. aclaude owns the entire
+  UI surface — layout, images, metrics dashboards, context window gauges,
+  health indicators. The NDJSON stream is a telemetry feed: token usage,
+  tool calls, reasoning, errors as structured events. aclaude parses,
+  aggregates, and renders however it wants.
+
+  This is stronger than either the SDK or the interactive TUI gave us:
+  - SDK limited us to its callback model and Node.js ecosystem
+  - Wrapping the TUI meant fighting someone else's layout
+  - Headless + own rendering means full control over the visual surface
+
+  Enables: custom operator console with visual identity for the
+  Director/Supervisor/Crew hierarchy. Marvel session health, context
+  budget burn rate, tool call frequency, session cost — all rendered
+  by aclaude, not Claude Code.
+
+  Cleanly resolves the two-audience problem (question-two-audience):
+  headless mode for agents under marvel is the same binary with no
+  rendering. Agents get the data pipe. Humans get the operator console.
+  Same NDJSON parsing, different output.
+
+  Reframes F14 (TUI) from "replicate Claude Code's TUI" to "build an
+  operator console that uses Claude Code as a headless engine."
+
+  Questions:
+  - What events does the NDJSON stream expose? Is it sufficient for
+    per-turn token counting, tool call tracking, cost estimation?
+  - What's missing from the stream that the SDK provided (hooks,
+    structured tool events, session lifecycle)?
+  - Can we get OAuth inheritance when spawning claude headless?
+  - What Rust TUI framework fits? ratatui is the obvious choice.
+  - How does this interact with marvel's observability (OTEL)?
+    Is aclaude the local renderer of the same telemetry marvel
+    collects cluster-wide?
+edges:
+  - target: question-two-audience
+    type: supersedes
+    note: "Resolves the two-audience split — same binary, render or don't"
+  - target: decision-language-rust
+    type: informed-by
+    note: "Rust ownership of rendering surface is the enabler"
+  - target: aae-orc::question-aclaude-ux-parity
+    type: reframes
+    note: "Not parity with Claude Code TUI — replacement of it"
+  - target: aae-orc::question-aclaude-tui
+    type: reframes
+    note: "Not 'how to build a TUI' but 'build an operator console'"
+provenance:
+  created_by: human
+  session: harvest-rust-rewrite
+  created_at: "2026-04-01"
