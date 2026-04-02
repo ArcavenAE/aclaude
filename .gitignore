@@ -1,33 +1,16 @@
-# Dependencies
-node_modules/
+# Rust build artifacts
+/target/
 
-# Build output
-cli/dist/
-cli/.*.bun-build
-cli/aclaude
-cli/aclaude-*
-cli/.aclaude/
-cli/src/themes-embedded.ts
-cli/src/version.ts
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Editor
+# IDE
+.idea/
+.vscode/
 *.swp
 *.swo
 *~
-.idea/
-.vscode/
+.DS_Store
 
-# Environment
-.env
-.env.local
+# Local state
+.drift-snapshot.json
 
-# Runtime
-*.log
+# tmux status cache
 .aclaude/tmux-status-*
-
-# Coverage
-coverage/

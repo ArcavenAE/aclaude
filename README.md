@@ -4,6 +4,8 @@ An opinionated [Claude Code](https://docs.anthropic.com/en/docs/claude-code) dis
 
 aclaude is an exploration of features useful in Claude Code-like programs when used with systems like [marvel](https://github.com/arcavenae/marvel) [switchboard](https://github.com/arcavenae/switchboard) [spectacle](https://github.com/arcavenae/spectacle) and an also an expression of preferences layered on top of the Claude Code foundation.
 
+**Rewritten in Rust** (2026-04-01) — eliminating all Node.js/npm dependencies following the [axios supply chain incident](docs/security/axios-supply-chain-2026-03-31.md). Single static binary, no runtime dependencies beyond the `claude` CLI itself.
+
 ## Install
 
 Requires: [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`).
@@ -40,7 +42,7 @@ Config at `~/.config/aclaude/` is preserved by uninstall. Delete manually if unw
 aclaude                          # start session with default persona
 aclaude -t dune -r dev           # start as Dune's dev character
 aclaude -m claude-opus-4-6       # override model
-aclaude persona list             # list 100 available themes
+aclaude persona list             # list available themes
 aclaude persona show dune        # show theme details
 aclaude config                   # show resolved configuration
 aclaude update                   # check for and install updates
@@ -48,15 +50,15 @@ aclaude update                   # check for and install updates
 
 ## What It Does
 
-- **Persona theming** — 100 theme rosters (Dune, West Wing, Hitchhiker's Guide, ...) with per-role characters, styles, and optional portrait images
-- **Configuration** — TOML config with 5-layer merge: defaults → global (`~/.config/aclaude/`) → local (`.aclaude/`) → env (`ACLAUDE_*`) → CLI flags
+- **Persona theming** — 118 theme rosters (Dune, West Wing, Hitchhiker's Guide, ...) with per-role characters, styles, and optional portrait images
+- **Configuration** — TOML config with 5-layer merge: defaults -> global (`~/.config/aclaude/`) -> local (`.aclaude/`) -> env (`ACLAUDE_*`) -> CLI flags
 - **tmux integration** — session management, statusline with context window usage, git info
 - **Self-updating** — `aclaude update` fetches the latest release, rotates versions in `~/.local/share/aclaude/versions/`
 - **Dual-track distribution** — `aclaude` (stable, tagged releases) and `aclaude-a` (alpha, every push to main) can coexist
 
 ## How It Works
 
-aclaude invokes Claude Code as a subprocess via the [Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk). It does not fork, modify, or redistribute Claude Code. Your credentials, your session — aclaude adds configuration and personality on top.
+aclaude spawns the Claude Code CLI (`claude`) as a subprocess. It does not use the Node.js Agent SDK or any npm packages. The `claude` CLI's NDJSON streaming protocol is the integration contract. aclaude does not fork, modify, or redistribute Claude Code. Your credentials, your session — aclaude adds configuration and personality on top.
 
 ## Auth
 
@@ -84,6 +86,16 @@ context_bar = true
 
 Environment variables: `ACLAUDE_SESSION__MODEL=claude-opus-4-6`
 
+## Building from Source
+
+Requires Rust 1.85+.
+
+```sh
+just build          # cargo build
+just test           # cargo test
+just ci             # full CI check (fmt, clippy, deny, test)
+```
+
 ## Credits
 
 Portrait images by [slabgorb](https://github.com/slabgorb). Persona themes jointly developed by [slabgorb](https://github.com/slabgorb) and [arcaven](https://github.com/arcaven).
@@ -92,4 +104,4 @@ Portrait images by [slabgorb](https://github.com/slabgorb). Persona themes joint
 
 MIT. See [LICENSE](LICENSE).
 
-Claude Code and the Agent SDK are subject to Anthropic's [Commercial Terms of Service](https://www.anthropic.com/commercial-terms). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Claude Code is subject to Anthropic's [Commercial Terms of Service](https://www.anthropic.com/commercial-terms). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
