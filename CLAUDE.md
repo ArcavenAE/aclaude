@@ -70,6 +70,10 @@ runtime without filesystem access — the binary is self-contained.
 - **Auth:** Delegates to Claude Code. Users authenticate with their own credentials. aclaude does not store, manage, or proxy authentication.
 - **No file deletion:** Never delete user files. Overwrite only with explicit intent.
 - **Parallel-safe:** Each session gets a UUID. No shared mutable state between sessions.
+- **Git workflow:** Gitflow. `develop` is the default branch. Branch from and
+  PR into `develop`. Alpha releases are cut automatically from `develop`.
+  Stable releases are cut from `main` via version tags (`v*`). Do not push
+  directly to `main`.
 
 ## Values
 
