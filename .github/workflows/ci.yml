@@ -1,11 +1,11 @@
 # CI + Alpha Release
-# Triggers: push to main, pull requests
+# Triggers: push to develop (alpha releases), pull requests to develop or main
 # Builds binaries for all platforms, signs/notarizes, creates pre-release, updates homebrew-tap
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
     paths-ignore:
       - '*.md'
       - 'docs/**'
@@ -17,7 +17,7 @@ on:
       - '.github/workflows/release.yml'
       - '.github/workflows/release-verify.yml'
   pull_request:
-    branches: [main]
+    branches: [develop, main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -97,7 +97,7 @@ jobs:
   build:
     name: Build (${{ matrix.target }})
     needs: [check-fmt, check-clippy, test, deny]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     strategy:
       matrix:
         include:
@@ -135,39 +135,23 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Build stable binary
-        env:
-          ACLAUDE_CHANNEL: stable
-          ACLAUDE_TAG: ${{ steps.version.outputs.version }}
-        run: |
-          cargo build --release --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/aclaude ${{ matrix.artifact_name }}
-
       - name: Build alpha binary
         env:
           ACLAUDE_CHANNEL: alpha
           ACLAUDE_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          cargo clean --release --target ${{ matrix.target }}
           cargo build --release --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/aclaude ${{ matrix.artifact_name }}-alpha
-          # Rename to aclaude-a convention
-          mv ${{ matrix.artifact_name }}-alpha $(echo "${{ matrix.artifact_name }}" | sed 's/aclaude/aclaude-a/')
+          cp target/${{ matrix.target }}/release/aclaude $(echo "${{ matrix.artifact_name }}" | sed 's/aclaude/aclaude-a/')
 
-      - name: Verify binaries
+      - name: Verify binary
         run: |
-          echo "Stable:"
-          ./${{ matrix.artifact_name }} --version
-          echo "Alpha:"
           ./$(echo "${{ matrix.artifact_name }}" | sed 's/aclaude/aclaude-a/') --version
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
           name: binaries-${{ matrix.artifact_name }}
-          path: |
-            ${{ matrix.artifact_name }}
-            aclaude-a-*
+          path: aclaude-a-*
 
   sign-and-notarize:
     name: Sign & Notarize
@@ -211,21 +195,17 @@ jobs:
 
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
-      - name: Sign binaries
+      - name: Sign binary
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          for binary in aclaude-darwin-${{ matrix.arch }} aclaude-a-darwin-${{ matrix.arch }}; do
-            codesign --force --options runtime \
-              --sign "$APPLE_SIGNING_IDENTITY" \
-              --timestamp \
-              "$binary"
-          done
+          codesign --force --options runtime \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            --timestamp \
+            aclaude-a-darwin-${{ matrix.arch }}
 
-      - name: Verify signatures
-        run: |
-          codesign --verify --deep --strict aclaude-darwin-${{ matrix.arch }}
-          codesign --verify --deep --strict aclaude-a-darwin-${{ matrix.arch }}
+      - name: Verify signature
+        run: codesign --verify --deep --strict aclaude-a-darwin-${{ matrix.arch }}
 
       - name: Build app bundles
         run: |
@@ -283,7 +263,6 @@ jobs:
         with:
           name: signed-binaries-darwin-${{ matrix.arch }}
           path: |
-            aclaude-darwin-${{ matrix.arch }}
             aclaude-a-darwin-${{ matrix.arch }}
             aclaude-${{ matrix.arch }}.pkg
             aclaude-${{ matrix.arch }}.dmg
@@ -334,7 +313,7 @@ jobs:
             --prerelease \
             --title "Alpha: $TAG" \
             --notes "$(cat <<NOTES
-          Automated alpha release from merge to main.
+          Automated alpha release from develop.
 
           **Version:** ${{ needs.build.outputs.version }}
           **Commit:** ${{ github.sha }}
@@ -342,10 +321,9 @@ jobs:
           **Signed:** ${{ needs.sign-and-notarize.result == 'success' && 'Yes (Apple Developer ID)' || 'No (unsigned)' }}
 
           **Binaries:**
-          - \`aclaude-darwin-arm64\` — macOS Apple Silicon
-          - \`aclaude-a-darwin-arm64\` — macOS Apple Silicon (alpha)
-          - \`aclaude-linux-amd64\` — Linux x86_64
-          - \`aclaude-linux-arm64\` — Linux ARM64
+          - \`aclaude-a-darwin-arm64\` — macOS Apple Silicon
+          - \`aclaude-a-linux-amd64\` — Linux x86_64
+          - \`aclaude-a-linux-arm64\` — Linux ARM64
           NOTES
           )" \
             dist/*
