@@ -207,14 +207,14 @@ jobs:
       - name: Verify signature
         run: codesign --verify --deep --strict aclaude-a-darwin-${{ matrix.arch }}
 
-      - name: Build app bundles
+      - name: Build app bundle
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           chmod +x scripts/create-app.sh
-          ./scripts/create-app.sh aclaude-darwin-${{ matrix.arch }} "$VERSION" .
+          ./scripts/create-app.sh aclaude-a-darwin-${{ matrix.arch }} "$VERSION" .
           mv Aclaude.app Aclaude-${{ matrix.arch }}.app
 
-      - name: Sign app bundles
+      - name: Sign app bundle
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
@@ -223,13 +223,13 @@ jobs:
             --timestamp \
             Aclaude-${{ matrix.arch }}.app
 
-      - name: Build dmg images
+      - name: Build dmg
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           chmod +x scripts/create-dmg.sh
           ./scripts/create-dmg.sh Aclaude-${{ matrix.arch }}.app "$VERSION" aclaude-${{ matrix.arch }}.dmg
 
-      - name: Build pkg installers
+      - name: Build pkg
         env:
           APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
         run: |
@@ -240,9 +240,9 @@ jobs:
           fi
           VERSION="${{ needs.build.outputs.version }}"
           chmod +x scripts/create-pkg.sh
-          ./scripts/create-pkg.sh aclaude-darwin-${{ matrix.arch }} "$VERSION" "$APPLE_INSTALLER_IDENTITY" aclaude-${{ matrix.arch }}.pkg
+          ./scripts/create-pkg.sh aclaude-a-darwin-${{ matrix.arch }} "$VERSION" "$APPLE_INSTALLER_IDENTITY" aclaude-${{ matrix.arch }}.pkg
 
-      - name: Notarize and staple all artifacts
+      - name: Notarize and staple
         env:
           APPLE_NOTARIZATION_APPLE_ID: ${{ secrets.APPLE_NOTARIZATION_APPLE_ID }}
           APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
