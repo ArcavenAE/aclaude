@@ -132,6 +132,10 @@ fn detect_linux_package_manager(binary_path: &str) -> Option<String> {
 }
 
 /// Determine the expected asset name for the current platform.
+///
+/// Matches the current binary name: if running as `aclaude`, downloads the
+/// stable asset (`aclaude-{os}-{arch}`). If running as `aclaude-a`, downloads
+/// the alpha asset (`aclaude-a-{os}-{arch}`).
 fn asset_name() -> Result<String> {
     let os = if cfg!(target_os = "macos") {
         "darwin"
@@ -153,8 +157,21 @@ fn asset_name() -> Result<String> {
         }
     };
 
-    // Asset naming convention: aclaude-a-{os}-{arch}
-    Ok(format!("aclaude-a-{os}-{arch}"))
+    // Match the current binary name to download the right channel asset.
+    // If the binary is named "aclaude-a" (or "aclaude-a-*"), use alpha assets.
+    // Otherwise use stable assets.
+    let binary_name = env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "aclaude".to_string());
+
+    let base = if binary_name.starts_with("aclaude-a") {
+        "aclaude-a"
+    } else {
+        "aclaude"
+    };
+
+    Ok(format!("{base}-{os}-{arch}"))
 }
 
 /// Check for available updates on GitHub.
@@ -435,22 +452,25 @@ mod tests {
     #[test]
     fn asset_name_is_valid_format() {
         let name = asset_name().expect("should detect platform");
+        // Binary name detection: cargo test binary is "aclaude" (stable),
+        // so asset name will be aclaude-{os}-{arch}. In alpha builds
+        // named "aclaude-a", it would be aclaude-a-{os}-{arch}.
         assert!(
-            name.starts_with("aclaude-a-"),
+            name.starts_with("aclaude-"),
             "unexpected asset name: {name}"
         );
-        // Should be aclaude-a-{os}-{arch}
         let parts: Vec<&str> = name.split('-').collect();
-        assert_eq!(parts.len(), 4, "expected 4 dash-separated parts: {name}");
+        // aclaude-{os}-{arch} = 3 parts, aclaude-a-{os}-{arch} = 4 parts
         assert!(
-            parts[2] == "darwin" || parts[2] == "linux",
-            "unexpected os: {}",
-            parts[2]
+            parts.len() == 3 || parts.len() == 4,
+            "expected 3 or 4 dash-separated parts: {name}"
         );
+        let os = parts[parts.len() - 2];
+        let arch = parts[parts.len() - 1];
+        assert!(os == "darwin" || os == "linux", "unexpected os: {os}");
         assert!(
-            parts[3] == "arm64" || parts[3] == "amd64",
-            "unexpected arch: {}",
-            parts[3]
+            arch == "arm64" || arch == "amd64",
+            "unexpected arch: {arch}"
         );
     }
 
