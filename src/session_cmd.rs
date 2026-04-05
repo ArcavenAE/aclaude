@@ -85,22 +85,18 @@ pub fn run_session_start(
         .set_status_right(&session, "")
         .context("set-option status-right failed")?;
 
-    // Launch aclaude in the main pane
+    // Launch aclaude in the first pane of the user session.
+    // Target the session's first window and pane directly using tmux's
+    // target syntax: {session}:0.0 (window 0, pane 0 within that session).
     let aclaude_bin =
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aclaude"));
     let aclaude_path = aclaude_bin.to_string_lossy();
 
-    let pane_resp = client
-        .run_command(&format!(
-            "display-message -p -t {session_name} '#{{pane_id}}'"
-        ))
-        .context("failed to query pane id")?;
-    let pane_id_str = pane_resp.first_line().unwrap_or("%0").trim().to_owned();
-    let pane = tmux_cmc::PaneId::new(&pane_id_str)
-        .unwrap_or_else(|_| tmux_cmc::PaneId::new("%0").expect("%0 is valid"));
-
+    // send-keys via raw command targeting session:window.pane
     client
-        .send_keys(&pane, &aclaude_path, false)
+        .run_command(&format!(
+            "send-keys -t '{session_name}:0.0' '{aclaude_path}' Enter"
+        ))
         .context("send-keys failed")?;
 
     println!("Session ready. Attach with: aclaude session attach -t {session_name}");
