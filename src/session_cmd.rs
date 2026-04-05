@@ -204,9 +204,11 @@ fn launch_in_pane(client: &Client, session_name: &str) -> Result<()> {
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aclaude"));
     let aclaude_path = aclaude_bin.to_string_lossy();
 
+    // Use 'exec' to replace the shell process with aclaude. This avoids
+    // leaving an orphan shell and the TUI overwrites the echoed command.
     client
         .run_command(&format!(
-            "send-keys -t '{session_name}:0.0' '{aclaude_path}' Enter"
+            "send-keys -t '{session_name}:0.0' 'exec {aclaude_path}' Enter"
         ))
         .context("send-keys failed")?;
     Ok(())
