@@ -9,6 +9,14 @@ use crate::petname;
 /// Prefix for control sessions — filtered from user-facing listings.
 const CTRL_PREFIX: &str = "_ctrl-";
 
+/// Return the binary name the user invoked (e.g. "aclaude-a" or "aclaude").
+fn binary_name() -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "aclaude".to_string())
+}
+
 /// Build ConnectOptions for a given session name and socket.
 fn connect_opts(cfg: &AclaudeConfig, socket: Option<&str>, session_name: &str) -> ConnectOptions {
     let socket_name = socket
@@ -99,7 +107,10 @@ pub fn run_session_start(
         ))
         .context("send-keys failed")?;
 
-    println!("Session ready. Attach with: aclaude session attach -t {session_name}");
+    println!(
+        "Session ready. Attach with: {} session attach -t {session_name}",
+        binary_name()
+    );
 
     // Drop the control mode connection before attaching
     drop(client);
@@ -246,11 +257,12 @@ pub fn run_session_stop(
     Ok(())
 }
 
-/// List user sessions (excluding control sessions).
+/// List sessions. Excludes control sessions unless `show_all` is true.
 pub fn run_session_list(
     config: &AclaudeConfig,
     socket: Option<&str>,
     names_only: bool,
+    show_all: bool,
 ) -> Result<()> {
     let socket_name = socket
         .map(str::to_owned)
@@ -268,9 +280,8 @@ pub fn run_session_list(
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
-        // Filter out control sessions
         let session_name = line.split(':').next().unwrap_or("");
-        if session_name.starts_with(CTRL_PREFIX) {
+        if !show_all && session_name.starts_with(CTRL_PREFIX) {
             continue;
         }
         if names_only {
@@ -283,19 +294,25 @@ pub fn run_session_list(
     Ok(())
 }
 
-/// Show status of sessions.
-pub fn run_session_status(config: &AclaudeConfig, socket: Option<&str>) -> Result<()> {
+/// Show status of sessions. Excludes control sessions unless `show_all` is true.
+pub fn run_session_status(
+    config: &AclaudeConfig,
+    socket: Option<&str>,
+    show_all: bool,
+) -> Result<()> {
     let socket_name = socket
         .map(str::to_owned)
         .unwrap_or_else(|| config.tmux.socket.clone());
 
+    // Use session_created (epoch) instead of session_created_string which
+    // is empty on some tmux versions. Format it ourselves.
     let output = Command::new("tmux")
         .args([
             "-L",
             &socket_name,
             "list-sessions",
             "-F",
-            "#{session_name}\t#{session_windows}\t#{session_created_string}\t#{?session_attached,attached,detached}",
+            "#{session_name}\t#{session_windows}\t#{session_created}\t#{?session_attached,attached,detached}",
         ])
         .output()
         .context("failed to run tmux list-sessions")?;
@@ -306,7 +323,7 @@ pub fn run_session_status(config: &AclaudeConfig, socket: Option<&str>) -> Resul
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut user_sessions = Vec::new();
+    let mut visible_sessions = Vec::new();
     let mut ctrl_count = 0;
 
     for line in stdout.lines() {
@@ -317,12 +334,14 @@ pub fn run_session_status(config: &AclaudeConfig, socket: Option<&str>) -> Resul
         let name = parts[0];
         if name.starts_with(CTRL_PREFIX) {
             ctrl_count += 1;
-            continue;
+            if !show_all {
+                continue;
+            }
         }
-        user_sessions.push(parts);
+        visible_sessions.push(parts);
     }
 
-    if user_sessions.is_empty() {
+    if visible_sessions.is_empty() {
         println!("No aclaude sessions.");
         return Ok(());
     }
@@ -331,18 +350,28 @@ pub fn run_session_status(config: &AclaudeConfig, socket: Option<&str>) -> Resul
         "{:<30} {:>7} {:<24} {:<10}",
         "SESSION", "WINDOWS", "CREATED", "STATE"
     );
-    for parts in &user_sessions {
+    for parts in &visible_sessions {
+        let created = parts
+            .get(2)
+            .and_then(|s| s.parse::<i64>().ok())
+            .map(|epoch| {
+                chrono::DateTime::from_timestamp(epoch, 0)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
         println!(
             "{:<30} {:>7} {:<24} {:<10}",
             parts.first().unwrap_or(&""),
             parts.get(1).unwrap_or(&""),
-            parts.get(2).unwrap_or(&""),
+            created,
             parts.get(3).unwrap_or(&""),
         );
     }
 
-    if ctrl_count > 0 {
-        println!("\n({ctrl_count} control session(s) hidden)");
+    if !show_all && ctrl_count > 0 {
+        println!("\n({ctrl_count} control session(s) hidden, use --all to show)");
     }
 
     Ok(())

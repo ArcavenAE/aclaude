@@ -126,12 +126,18 @@ enum SessionAction {
         /// Show only session names (no details)
         #[arg(long)]
         names: bool,
+        /// Include control sessions
+        #[arg(long)]
+        all: bool,
     },
     /// Show session status
     Status {
         /// tmux socket name override
         #[arg(long)]
         socket: Option<String>,
+        /// Include control sessions
+        #[arg(long)]
+        all: bool,
     },
 }
 
@@ -344,11 +350,11 @@ fn main() -> anyhow::Result<()> {
                 SessionAction::Stop { name, socket, all } => {
                     session_cmd::run_session_stop(&cfg, socket.as_deref(), name.as_deref(), all)?;
                 }
-                SessionAction::List { socket, names } => {
-                    session_cmd::run_session_list(&cfg, socket.as_deref(), names)?;
+                SessionAction::List { socket, names, all } => {
+                    session_cmd::run_session_list(&cfg, socket.as_deref(), names, all)?;
                 }
-                SessionAction::Status { socket } => {
-                    session_cmd::run_session_status(&cfg, socket.as_deref())?;
+                SessionAction::Status { socket, all } => {
+                    session_cmd::run_session_status(&cfg, socket.as_deref(), all)?;
                 }
             }
         }
