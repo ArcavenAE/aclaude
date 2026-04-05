@@ -6,8 +6,11 @@ use tmux_cmc::{Client, ConnectOptions, NewSessionOptions};
 use crate::config::AclaudeConfig;
 use crate::petname;
 
-/// Prefix for control sessions — filtered from user-facing listings.
-const CTRL_PREFIX: &str = "_ctrl-";
+/// Name of the shared control session (one per socket).
+const CTRL_SESSION: &str = "_ctrl";
+
+/// Prefix used to identify control sessions in listings.
+const CTRL_PREFIX: &str = "_ctrl";
 
 /// Return the binary name the user invoked (e.g. "aclaude-a" or "aclaude").
 fn binary_name() -> String {
@@ -17,18 +20,11 @@ fn binary_name() -> String {
         .unwrap_or_else(|| "aclaude".to_string())
 }
 
-/// Build ConnectOptions for a given session name and socket.
-fn connect_opts(cfg: &AclaudeConfig, socket: Option<&str>, session_name: &str) -> ConnectOptions {
-    let socket_name = socket
+/// Resolve the socket name from CLI arg or config.
+fn socket_name(config: &AclaudeConfig, socket: Option<&str>) -> String {
+    socket
         .map(str::to_owned)
-        .unwrap_or_else(|| cfg.tmux.socket.clone());
-
-    ConnectOptions {
-        socket_name: Some(socket_name),
-        control_session_name: Some(format!("{CTRL_PREFIX}{session_name}")),
-        control_session_command: Some("cat".into()),
-        ..ConnectOptions::default()
-    }
+        .unwrap_or_else(|| config.tmux.socket.clone())
 }
 
 /// Resolve the session name: use the provided name, or generate a petname.
@@ -37,11 +33,54 @@ fn resolve_session_name(name: Option<&str>) -> String {
         .unwrap_or_else(|| format!("aclaude-{}", petname::generate()))
 }
 
+/// Check how many user sessions exist on the socket.
+fn user_session_count(socket: &str) -> usize {
+    list_user_sessions(socket).map(|s| s.len()).unwrap_or(0)
+}
+
+/// Check if the shared control session exists on the socket.
+fn ctrl_session_exists(socket: &str) -> bool {
+    Command::new("tmux")
+        .args(["-L", socket, "has-session", "-t", CTRL_SESSION])
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+/// Connect to tmux via control mode using the smart default:
+/// - If no other sessions exist: attach control mode directly to the user's session (Pattern 1)
+/// - If other sessions exist or will exist: use the shared _ctrl session (Pattern 2)
+fn smart_connect(socket: &str, session_name: &str, is_new_session: bool) -> Result<Client> {
+    let existing_count = user_session_count(socket);
+    let will_be_multi = existing_count > 0 && is_new_session;
+    let already_multi = existing_count > 1;
+    let has_ctrl = ctrl_session_exists(socket);
+
+    let use_ctrl = will_be_multi || already_multi || has_ctrl;
+
+    let opts = if use_ctrl {
+        // Pattern 2: shared control session
+        ConnectOptions {
+            socket_name: Some(socket.to_owned()),
+            control_session_name: Some(CTRL_SESSION.to_owned()),
+            control_session_command: Some("cat".into()),
+            ..ConnectOptions::default()
+        }
+    } else {
+        // Pattern 1: attach directly to the user's session
+        // The session must exist first — caller creates it before connecting,
+        // or we create it here via new-session in the connect options.
+        ConnectOptions {
+            socket_name: Some(socket.to_owned()),
+            control_session_name: Some(session_name.to_owned()),
+            control_session_command: None, // don't override — the session runs a shell
+            ..ConnectOptions::default()
+        }
+    };
+
+    Client::connect(&opts).context("failed to connect to tmux — is tmux installed?")
+}
+
 /// Start (or attach to) an aclaude tmux session.
-///
-/// Creates the session if it doesn't exist, configures the statusline via
-/// control mode, launches the aclaude binary in the main pane, and optionally
-/// attaches the current terminal.
 pub fn run_session_start(
     config: &AclaudeConfig,
     socket: Option<&str>,
@@ -49,37 +88,101 @@ pub fn run_session_start(
     attach: bool,
 ) -> Result<()> {
     let session_name = resolve_session_name(session_name);
-    let opts = connect_opts(config, socket, &session_name);
-    let socket_name = opts.socket_name.clone().unwrap_or_default();
+    let socket = socket_name(config, socket);
 
-    let client =
-        Client::connect(&opts).context("failed to connect to tmux — is tmux installed?")?;
+    // Check if this session already exists
+    let already_exists = Command::new("tmux")
+        .args(["-L", &socket, "has-session", "-t", &session_name])
+        .output()
+        .is_ok_and(|o| o.status.success());
 
-    let session = if client
-        .has_session(&session_name)
-        .context("has-session failed")?
-    {
+    if already_exists {
         println!("Session '{session_name}' already exists.");
-        let resp = client
-            .run_command(&format!(
-                "display-message -p -t {session_name} '#{{session_id}}'"
-            ))
-            .context("failed to query session id")?;
-        let id_str = resp.first_line().unwrap_or("$0").trim().to_owned();
-        tmux_cmc::SessionId::new(&id_str)
-            .unwrap_or_else(|_| tmux_cmc::SessionId::new("$0").expect("$0 is valid"))
-    } else {
+        println!(
+            "Attach with: {} session attach -t {session_name}",
+            binary_name()
+        );
+        if attach {
+            return exec_attach(&socket, &session_name);
+        }
+        return Ok(());
+    }
+
+    // Determine connection strategy
+    let existing_count = user_session_count(&socket);
+
+    if existing_count == 0 {
+        // First session: create it, then attach control mode to it (Pattern 1)
         println!("Creating session '{session_name}'...");
+
+        // Create the session detached first
+        let status = Command::new("tmux")
+            .args([
+                "-L",
+                &socket,
+                "new-session",
+                "-d",
+                "-s",
+                &session_name,
+                "-x",
+                "200",
+                "-y",
+                "50",
+            ])
+            .status()
+            .context("failed to create tmux session")?;
+        if !status.success() {
+            anyhow::bail!("tmux new-session failed");
+        }
+
+        // Attach control mode directly to the user's session
+        let client = smart_connect(&socket, &session_name, false)?;
+        configure_session(&client, config, &session_name)?;
+        launch_in_pane(&client, &session_name)?;
+        drop(client);
+    } else {
+        // Additional session: use shared _ctrl (Pattern 2)
+        // If upgrading from Pattern 1 (one session, no _ctrl), the
+        // smart_connect will create _ctrl automatically.
+        println!("Creating session '{session_name}'...");
+
+        let client = smart_connect(&socket, &session_name, true)?;
         client
             .new_session(&NewSessionOptions {
                 name: Some(session_name.clone()),
                 detached: true,
                 ..Default::default()
             })
-            .context("new-session failed")?
-    };
+            .context("new-session failed")?;
+        configure_session(&client, config, &session_name)?;
+        launch_in_pane(&client, &session_name)?;
+        drop(client);
+    }
 
-    // Configure statusline via control mode
+    println!(
+        "Session ready. Attach with: {} session attach -t {session_name}",
+        binary_name()
+    );
+
+    if attach {
+        exec_attach(&socket, &session_name)?;
+    }
+
+    Ok(())
+}
+
+/// Configure statusline for a session.
+fn configure_session(client: &Client, config: &AclaudeConfig, session_name: &str) -> Result<()> {
+    // Query the session ID
+    let resp = client
+        .run_command(&format!(
+            "display-message -p -t '{session_name}' '#{{session_id}}'"
+        ))
+        .context("failed to query session id")?;
+    let id_str = resp.first_line().unwrap_or("$0").trim().to_owned();
+    let session = tmux_cmc::SessionId::new(&id_str)
+        .unwrap_or_else(|_| tmux_cmc::SessionId::new("$0").expect("$0 is valid"));
+
     client
         .set_status_enabled(&session, true)
         .context("set-option status failed")?;
@@ -92,40 +195,33 @@ pub fn run_session_start(
     client
         .set_status_right(&session, "")
         .context("set-option status-right failed")?;
+    Ok(())
+}
 
-    // Launch aclaude in the first pane of the user session.
-    // Target the session's first window and pane directly using tmux's
-    // target syntax: {session}:0.0 (window 0, pane 0 within that session).
+/// Launch aclaude binary in the first pane of a session.
+fn launch_in_pane(client: &Client, session_name: &str) -> Result<()> {
     let aclaude_bin =
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aclaude"));
     let aclaude_path = aclaude_bin.to_string_lossy();
 
-    // send-keys via raw command targeting session:window.pane
     client
         .run_command(&format!(
             "send-keys -t '{session_name}:0.0' '{aclaude_path}' Enter"
         ))
         .context("send-keys failed")?;
+    Ok(())
+}
 
-    println!(
-        "Session ready. Attach with: {} session attach -t {session_name}",
-        binary_name()
-    );
+/// Exec tmux attach (replaces current process on success).
+fn exec_attach(socket: &str, session_name: &str) -> Result<()> {
+    let status = Command::new("tmux")
+        .args(["-L", socket, "attach-session", "-t", session_name])
+        .status()
+        .context("failed to exec tmux attach")?;
 
-    // Drop the control mode connection before attaching
-    drop(client);
-
-    if attach {
-        let status = Command::new("tmux")
-            .args(["-L", &socket_name, "attach-session", "-t", &session_name])
-            .status()
-            .context("failed to exec tmux attach")?;
-
-        if !status.success() {
-            anyhow::bail!("tmux attach-session exited with {status}");
-        }
+    if !status.success() {
+        anyhow::bail!("tmux attach-session exited with {status}");
     }
-
     Ok(())
 }
 
@@ -135,17 +231,14 @@ pub fn run_session_attach(
     socket: Option<&str>,
     session_name: Option<&str>,
 ) -> Result<()> {
-    let socket_name = socket
-        .map(str::to_owned)
-        .unwrap_or_else(|| config.tmux.socket.clone());
+    let socket = socket_name(config, socket);
 
-    // If no session name given, find the first non-control session
     let target = match session_name {
         Some(name) => name.to_owned(),
         None => {
-            let sessions = list_user_sessions(&socket_name)?;
+            let sessions = list_user_sessions(&socket)?;
             match sessions.len() {
-                0 => anyhow::bail!("no aclaude sessions found on socket '{socket_name}'"),
+                0 => anyhow::bail!("no aclaude sessions found on socket '{socket}'"),
                 1 => sessions[0].clone(),
                 _ => {
                     println!("Multiple sessions found:");
@@ -153,7 +246,8 @@ pub fn run_session_attach(
                         println!("  {s}");
                     }
                     anyhow::bail!(
-                        "specify a session with -t, e.g.: aclaude session attach -t {}",
+                        "specify a session with -t, e.g.: {} session attach -t {}",
+                        binary_name(),
                         sessions[0]
                     );
                 }
@@ -161,16 +255,7 @@ pub fn run_session_attach(
         }
     };
 
-    let status = Command::new("tmux")
-        .args(["-L", &socket_name, "attach-session", "-t", &target])
-        .status()
-        .context("failed to exec tmux attach")?;
-
-    if !status.success() {
-        anyhow::bail!("no session named '{target}' on socket '{socket_name}'");
-    }
-
-    Ok(())
+    exec_attach(&socket, &target)
 }
 
 /// Stop (kill) an aclaude session, or all sessions.
@@ -180,29 +265,26 @@ pub fn run_session_stop(
     session_name: Option<&str>,
     all: bool,
 ) -> Result<()> {
-    let socket_name = socket
-        .map(str::to_owned)
-        .unwrap_or_else(|| config.tmux.socket.clone());
+    let socket = socket_name(config, socket);
 
     if all {
         let status = Command::new("tmux")
-            .args(["-L", &socket_name, "kill-server"])
+            .args(["-L", &socket, "kill-server"])
             .status()
             .context("failed to kill tmux server")?;
 
         if status.success() {
-            println!("All sessions on socket '{socket_name}' stopped.");
+            println!("All sessions on socket '{socket}' stopped.");
         } else {
-            println!("No tmux server running on socket '{socket_name}'.");
+            println!("No tmux server running on socket '{socket}'.");
         }
         return Ok(());
     }
 
-    // If no session name given, find the only session or error
     let target = match session_name {
         Some(name) => name.to_owned(),
         None => {
-            let sessions = list_user_sessions(&socket_name)?;
+            let sessions = list_user_sessions(&socket)?;
             match sessions.len() {
                 0 => {
                     println!("No aclaude sessions found.");
@@ -220,36 +302,16 @@ pub fn run_session_stop(
         }
     };
 
-    // Kill the user session and its control session
-    let ctrl_name = format!("{CTRL_PREFIX}{target}");
+    // Kill the user session via tmux CLI
+    let _ = Command::new("tmux")
+        .args(["-L", &socket, "kill-session", "-t", &target])
+        .status();
 
-    let opts = connect_opts(config, socket, &target);
-    if let Ok(client) = Client::connect(&opts) {
-        // Query session ID and kill it
-        if let Ok(resp) =
-            client.run_command(&format!("display-message -p -t {target} '#{{session_id}}'"))
-        {
-            let id_str = resp.first_line().unwrap_or("$0").trim().to_owned();
-            if let Ok(session) = tmux_cmc::SessionId::new(&id_str) {
-                let _ = client.kill_session(&session);
-            }
-        }
-        // Kill the control session too
-        if let Ok(resp) = client.run_command(&format!(
-            "display-message -p -t {ctrl_name} '#{{session_id}}'"
-        )) {
-            let id_str = resp.first_line().unwrap_or("$0").trim().to_owned();
-            if let Ok(session) = tmux_cmc::SessionId::new(&id_str) {
-                let _ = client.kill_session(&session);
-            }
-        }
-    } else {
-        // Fallback: use tmux CLI directly
+    // If this was the last user session, clean up _ctrl too
+    let remaining = user_session_count(&socket);
+    if remaining == 0 && ctrl_session_exists(&socket) {
         let _ = Command::new("tmux")
-            .args(["-L", &socket_name, "kill-session", "-t", &target])
-            .status();
-        let _ = Command::new("tmux")
-            .args(["-L", &socket_name, "kill-session", "-t", &ctrl_name])
+            .args(["-L", &socket, "kill-session", "-t", CTRL_SESSION])
             .status();
     }
 
@@ -264,28 +326,26 @@ pub fn run_session_list(
     names_only: bool,
     show_all: bool,
 ) -> Result<()> {
-    let socket_name = socket
-        .map(str::to_owned)
-        .unwrap_or_else(|| config.tmux.socket.clone());
+    let socket = socket_name(config, socket);
 
     let output = Command::new("tmux")
-        .args(["-L", &socket_name, "list-sessions"])
+        .args(["-L", &socket, "list-sessions"])
         .output()
         .context("failed to run tmux list-sessions")?;
 
     if !output.status.success() {
-        println!("No sessions on socket '{socket_name}'.");
+        println!("No sessions on socket '{socket}'.");
         return Ok(());
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
-        let session_name = line.split(':').next().unwrap_or("");
-        if !show_all && session_name.starts_with(CTRL_PREFIX) {
+        let name = line.split(':').next().unwrap_or("");
+        if !show_all && name.starts_with(CTRL_PREFIX) {
             continue;
         }
         if names_only {
-            println!("{session_name}");
+            println!("{name}");
         } else {
             println!("{line}");
         }
@@ -300,16 +360,12 @@ pub fn run_session_status(
     socket: Option<&str>,
     show_all: bool,
 ) -> Result<()> {
-    let socket_name = socket
-        .map(str::to_owned)
-        .unwrap_or_else(|| config.tmux.socket.clone());
+    let socket = socket_name(config, socket);
 
-    // Use session_created (epoch) instead of session_created_string which
-    // is empty on some tmux versions. Format it ourselves.
     let output = Command::new("tmux")
         .args([
             "-L",
-            &socket_name,
+            &socket,
             "list-sessions",
             "-F",
             "#{session_name}\t#{session_windows}\t#{session_created}\t#{?session_attached,attached,detached}",
@@ -318,7 +374,7 @@ pub fn run_session_status(
         .context("failed to run tmux list-sessions")?;
 
     if !output.status.success() {
-        println!("No sessions on socket '{socket_name}'.");
+        println!("No sessions on socket '{socket}'.");
         return Ok(());
     }
 
@@ -378,9 +434,9 @@ pub fn run_session_status(
 }
 
 /// List user session names (excluding control sessions) via tmux CLI.
-fn list_user_sessions(socket_name: &str) -> Result<Vec<String>> {
+fn list_user_sessions(socket: &str) -> Result<Vec<String>> {
     let output = Command::new("tmux")
-        .args(["-L", socket_name, "list-sessions", "-F", "#{session_name}"])
+        .args(["-L", socket, "list-sessions", "-F", "#{session_name}"])
         .output()
         .context("failed to run tmux list-sessions")?;
 
