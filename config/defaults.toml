@@ -19,3 +19,6 @@ otel_endpoint = ""
 [tmux]
 layout = "bottom"
 socket = "ac"
+
+[portrait]
+display = "auto"  # auto | always | never

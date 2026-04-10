@@ -29,3 +29,9 @@
 [tmux]
 # layout = "bottom"               # bottom | top | left | right
 # socket = "ac"
+
+[portrait]
+# display = "auto"                # auto | always | never
+#                                  # auto: detect terminal support
+#                                  # always: attempt regardless of detection
+#                                  # never: disable portrait display

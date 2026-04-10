@@ -73,6 +73,25 @@ pub struct TmuxConfig {
     pub status_interval: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortraitConfig {
+    /// Image display mode: "auto" (detect terminal), "always", "never".
+    #[serde(default = "default_portrait_display")]
+    pub display: String,
+}
+
+fn default_portrait_display() -> String {
+    "auto".to_string()
+}
+
+impl Default for PortraitConfig {
+    fn default() -> Self {
+        Self {
+            display: default_portrait_display(),
+        }
+    }
+}
+
 fn default_layout() -> String {
     "bottom".to_string()
 }
@@ -95,6 +114,8 @@ pub struct AclaudeConfig {
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub tmux: TmuxConfig,
+    #[serde(default)]
+    pub portrait: PortraitConfig,
 }
 
 impl Default for SessionConfig {

@@ -8,4 +8,5 @@ pub mod protocol;
 pub mod session;
 pub mod session_cmd;
 pub mod statusline;
+pub mod terminal;
 pub mod updater;

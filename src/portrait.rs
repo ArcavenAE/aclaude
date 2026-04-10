@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
+use crate::config::PortraitConfig;
 use crate::persona::PersonaAgent;
+use crate::terminal::{self, DisplayTool};
 
 /// Portrait file paths by size.
 pub struct PortraitPaths {
@@ -189,53 +190,89 @@ pub fn resolve_portrait(
     paths
 }
 
-/// Check if the terminal supports inline image display (Kitty/Ghostty).
+/// Check if the terminal supports inline image display.
 pub fn terminal_supports_images() -> bool {
-    let term_program = env::var("TERM_PROGRAM").unwrap_or_default().to_lowercase();
-    let term = env::var("TERM").unwrap_or_default().to_lowercase();
-    term_program == "ghostty" || term_program == "kitty" || term.contains("kitty")
+    !matches!(
+        terminal::detect_image_support(),
+        terminal::ImageSupport::Unsupported
+    )
 }
 
-/// Display a portrait image inline using kitten icat.
+/// Display a portrait image inline.
 ///
+/// Uses three-tier terminal detection and a display tool fallback chain.
 /// Returns true if the image was displayed successfully.
-pub fn display_portrait(path: &Path, align: &str) -> bool {
-    if !terminal_supports_images() {
+pub fn display_portrait(path: &Path, align: &str, cfg: &PortraitConfig) -> bool {
+    let (should_try, tool) = terminal::resolve_display_intent(&cfg.display);
+    if !should_try {
         return false;
     }
     if !path.exists() {
         return false;
     }
+    let Some(tool) = tool else {
+        return false;
+    };
 
+    match tool {
+        DisplayTool::KittenIcat => try_kitten_icat(path, align),
+        DisplayTool::WeztermImgcat => try_wezterm_imgcat(path),
+    }
+}
+
+/// Display an image using `kitten icat`.
+///
+/// When inside tmux, adds `--passthrough detect` so kitten auto-wraps
+/// graphics commands in tmux DCS passthrough sequences.
+fn try_kitten_icat(path: &Path, align: &str) -> bool {
     let path_str = path.to_string_lossy();
+    let in_tmux = terminal::inside_tmux();
 
-    // Try with --align first
+    let mut args = vec!["icat", "--align", align, "--transfer-mode=stream"];
+    if in_tmux {
+        args.push("--passthrough");
+        args.push("detect");
+    }
+    args.push(&path_str);
+
     let result = Command::new("kitten")
-        .args([
-            "icat",
-            "--align",
-            align,
-            "--transfer-mode=stream",
-            &path_str,
-        ])
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::null())
+        .args(&args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::null())
         .status();
 
     if result.is_ok_and(|s| s.success()) {
         return true;
     }
 
-    // Fallback without --align
-    let result = Command::new("kitten")
-        .args(["icat", &path_str])
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::null())
-        .status();
+    // Fallback without --align (some older kitten versions)
+    let mut fallback_args = vec!["icat"];
+    if in_tmux {
+        fallback_args.push("--passthrough");
+        fallback_args.push("detect");
+    }
+    fallback_args.push(&path_str);
 
-    result.is_ok_and(|s| s.success())
+    Command::new("kitten")
+        .args(&fallback_args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+/// Display an image using `wezterm imgcat`.
+fn try_wezterm_imgcat(path: &Path) -> bool {
+    let path_str = path.to_string_lossy();
+    Command::new("wezterm")
+        .args(["imgcat", &path_str])
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }
 
 /// Get portrait cache statistics: (themes_with_portraits, total_images).

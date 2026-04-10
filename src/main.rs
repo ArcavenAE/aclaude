@@ -267,6 +267,7 @@ fn main() -> anyhow::Result<()> {
                 portrait_align,
                 portrait_size,
             } => {
+                let cfg = config::load_config(cli_overrides)?;
                 let theme = persona::load_theme(&name)?;
                 let agent_data = persona::get_agent(&theme, &agent)?;
                 let portraits = portrait::resolve_portrait(&name, agent_data, Some(&agent));
@@ -274,10 +275,8 @@ fn main() -> anyhow::Result<()> {
                 // Portrait before card (position: top)
                 if show_portrait && portrait_position == "top" {
                     if let Some(path) = portraits.best_for_size(&portrait_size) {
-                        if !portrait::display_portrait(path, &portrait_align) {
-                            println!(
-                                "(terminal does not support inline images — try Kitty or Ghostty)"
-                            );
+                        if !portrait::display_portrait(path, &portrait_align, &cfg.portrait) {
+                            println!("(terminal does not support inline images)");
                         }
                         println!();
                     }
@@ -320,10 +319,8 @@ fn main() -> anyhow::Result<()> {
                 if show_portrait && portrait_position == "bottom" {
                     println!();
                     if let Some(path) = portraits.best_for_size(&portrait_size) {
-                        if !portrait::display_portrait(path, &portrait_align) {
-                            println!(
-                                "(terminal does not support inline images — try Kitty or Ghostty)"
-                            );
+                        if !portrait::display_portrait(path, &portrait_align, &cfg.portrait) {
+                            println!("(terminal does not support inline images)");
                         }
                     }
                 }

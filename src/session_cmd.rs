@@ -195,6 +195,12 @@ fn configure_session(client: &Client, config: &AclaudeConfig, session_name: &str
     client
         .set_status_right(&session, "")
         .context("set-option status-right failed")?;
+
+    // Enable Kitty graphics passthrough for portrait display (tmux 3.3+).
+    // Global scope on the dedicated aclaude socket — doesn't affect other tmux sessions.
+    // Ignore errors: older tmux versions don't have this option.
+    let _ = client.set_global_option("allow-passthrough", "on");
+
     Ok(())
 }
 
