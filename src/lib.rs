@@ -1,3 +1,4 @@
+pub mod bridge;
 pub mod config;
 pub mod error;
 pub mod paths;
@@ -5,8 +6,10 @@ pub mod persona;
 pub mod petname;
 pub mod portrait;
 pub mod protocol;
+pub mod protocol_ext;
 pub mod session;
 pub mod session_cmd;
 pub mod statusline;
 pub mod terminal;
+pub mod tui;
 pub mod updater;
