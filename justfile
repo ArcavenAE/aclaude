@@ -1,4 +1,4 @@
-# aclaude — opinionated Claude Code distribution
+# forestage — opinionated Claude Code distribution
 
 # Default: list recipes
 default:
@@ -14,7 +14,7 @@ build:
 build-release:
     cargo build --release
 
-# Run aclaude with arguments
+# Run forestage with arguments
 run *args:
     cargo run -- {{args}}
 

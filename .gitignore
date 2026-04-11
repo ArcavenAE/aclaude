@@ -17,8 +17,8 @@
 .drift-snapshot.json
 
 # tmux status cache
-.aclaude/tmux-status-*
-.aclaude/
+.forestage/tmux-status-*
+.forestage/
 
 # Portrait distribution artifacts
 /dist/portraits/

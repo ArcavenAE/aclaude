@@ -1,8 +1,8 @@
 # CI — Checks, Build, Sign, Release
 #
 # Branch-aware: same workflow on develop and main.
-#   develop → alpha channel (aclaude-a), alpha pre-release
-#   main    → stable channel (aclaude), stable pre-release
+#   develop → alpha channel (forestage-a), alpha pre-release
+#   main    → stable channel (forestage), stable pre-release
 # Tagged releases (v*) are handled by release.yml.
 name: CI
 
@@ -59,13 +59,13 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
             echo "is_alpha=true" >> "$GITHUB_OUTPUT"
             echo "channel=alpha" >> "$GITHUB_OUTPUT"
-            echo "binary_prefix=aclaude-a" >> "$GITHUB_OUTPUT"
+            echo "binary_prefix=forestage-a" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=alpha" >> "$GITHUB_OUTPUT"
             echo "release_title=Alpha" >> "$GITHUB_OUTPUT"
           else
             echo "is_alpha=false" >> "$GITHUB_OUTPUT"
             echo "channel=stable" >> "$GITHUB_OUTPUT"
-            echo "binary_prefix=aclaude" >> "$GITHUB_OUTPUT"
+            echo "binary_prefix=forestage" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=stable" >> "$GITHUB_OUTPUT"
             echo "release_title=Stable" >> "$GITHUB_OUTPUT"
           fi
@@ -167,13 +167,13 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             os: macos-latest
-            artifact_name: aclaude-darwin-arm64
+            artifact_name: forestage-darwin-arm64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact_name: aclaude-linux-amd64
+            artifact_name: forestage-linux-amd64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
-            artifact_name: aclaude-linux-arm64
+            artifact_name: forestage-linux-arm64
     runs-on: ${{ matrix.os }}
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -208,17 +208,17 @@ jobs:
 
       - name: Build binary
         env:
-          ACLAUDE_CHANNEL: ${{ needs.config.outputs.channel }}
-          ACLAUDE_TAG: ${{ steps.version.outputs.tag }}
+          FORESTAGE_CHANNEL: ${{ needs.config.outputs.channel }}
+          FORESTAGE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           cargo build --release --target ${{ matrix.target }}
           # Derive the output binary name from the artifact name and binary prefix
-          OUTPUT=$(echo "${{ matrix.artifact_name }}" | sed "s/aclaude/${{ needs.config.outputs.binary_prefix }}/")
-          cp target/${{ matrix.target }}/release/aclaude "$OUTPUT"
+          OUTPUT=$(echo "${{ matrix.artifact_name }}" | sed "s/forestage/${{ needs.config.outputs.binary_prefix }}/")
+          cp target/${{ matrix.target }}/release/forestage "$OUTPUT"
 
       - name: Verify binary
         run: |
-          OUTPUT=$(echo "${{ matrix.artifact_name }}" | sed "s/aclaude/${{ needs.config.outputs.binary_prefix }}/")
+          OUTPUT=$(echo "${{ matrix.artifact_name }}" | sed "s/forestage/${{ needs.config.outputs.binary_prefix }}/")
           ./"$OUTPUT" --version
 
       - name: Upload artifacts
@@ -252,7 +252,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: binaries-aclaude-darwin-${{ matrix.arch }}
+          name: binaries-forestage-darwin-${{ matrix.arch }}
 
       - name: Import certificates
         env:
@@ -297,7 +297,7 @@ jobs:
           VERSION="${{ needs.build.outputs.version }}"
           chmod +x scripts/create-app.sh
           ./scripts/create-app.sh ${{ needs.config.outputs.binary_prefix }}-darwin-${{ matrix.arch }} "$VERSION" .
-          mv Aclaude.app Aclaude-${{ matrix.arch }}.app
+          mv Forestage.app Forestage-${{ matrix.arch }}.app
 
       - name: Sign app bundle
         env:
@@ -306,13 +306,13 @@ jobs:
           codesign --force --deep --options runtime \
             --sign "$APPLE_SIGNING_IDENTITY" \
             --timestamp \
-            Aclaude-${{ matrix.arch }}.app
+            Forestage-${{ matrix.arch }}.app
 
       - name: Build dmg
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           chmod +x scripts/create-dmg.sh
-          ./scripts/create-dmg.sh Aclaude-${{ matrix.arch }}.app "$VERSION" aclaude-${{ matrix.arch }}.dmg
+          ./scripts/create-dmg.sh Forestage-${{ matrix.arch }}.app "$VERSION" forestage-${{ matrix.arch }}.dmg
 
       - name: Build pkg
         env:
@@ -325,7 +325,7 @@ jobs:
           fi
           VERSION="${{ needs.build.outputs.version }}"
           chmod +x scripts/create-pkg.sh
-          ./scripts/create-pkg.sh ${{ needs.config.outputs.binary_prefix }}-darwin-${{ matrix.arch }} "$VERSION" "$APPLE_INSTALLER_IDENTITY" aclaude-${{ matrix.arch }}.pkg
+          ./scripts/create-pkg.sh ${{ needs.config.outputs.binary_prefix }}-darwin-${{ matrix.arch }} "$VERSION" "$APPLE_INSTALLER_IDENTITY" forestage-${{ matrix.arch }}.pkg
 
       - name: Notarize and staple
         env:
@@ -333,7 +333,7 @@ jobs:
           APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
           APPLE_NOTARIZATION_TEAM_ID: ${{ secrets.APPLE_NOTARIZATION_TEAM_ID }}
         run: |
-          for ARTIFACT in aclaude-${{ matrix.arch }}.pkg aclaude-${{ matrix.arch }}.dmg; do
+          for ARTIFACT in forestage-${{ matrix.arch }}.pkg forestage-${{ matrix.arch }}.dmg; do
             echo "Notarizing $ARTIFACT..."
             xcrun notarytool submit "$ARTIFACT" \
               --apple-id "$APPLE_NOTARIZATION_APPLE_ID" \
@@ -349,8 +349,8 @@ jobs:
           name: signed-binaries-darwin-${{ matrix.arch }}
           path: |
             ${{ needs.config.outputs.binary_prefix }}-darwin-${{ matrix.arch }}
-            aclaude-${{ matrix.arch }}.pkg
-            aclaude-${{ matrix.arch }}.dmg
+            forestage-${{ matrix.arch }}.pkg
+            forestage-${{ matrix.arch }}.dmg
           retention-days: 14
 
       - name: Cleanup keychain
@@ -378,19 +378,19 @@ jobs:
       - name: Download macOS arm64
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: ${{ needs.sign-and-notarize.result == 'success' && 'signed-binaries-darwin-arm64' || 'binaries-aclaude-darwin-arm64' }}
+          name: ${{ needs.sign-and-notarize.result == 'success' && 'signed-binaries-darwin-arm64' || 'binaries-forestage-darwin-arm64' }}
           path: dist/
 
       - name: Download Linux amd64
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: binaries-aclaude-linux-amd64
+          name: binaries-forestage-linux-amd64
           path: dist/
 
       - name: Download Linux arm64
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: binaries-aclaude-linux-arm64
+          name: binaries-forestage-linux-arm64
           path: dist/
 
       - name: List release files
@@ -468,20 +468,20 @@ jobs:
           TAG="${{ needs.build.outputs.tag }}"
           VERSION="${{ needs.build.outputs.version }}"
 
-          SHA256_ARM64=$(shasum -a 256 dist/aclaude-a-darwin-arm64 | cut -d' ' -f1)
+          SHA256_ARM64=$(shasum -a 256 dist/forestage-a-darwin-arm64 | cut -d' ' -f1)
 
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/arcavenae/homebrew-tap.git" homebrew-tap-repo
           cd homebrew-tap-repo
 
           mkdir -p Formula
-          cp ../Formula/aclaude-a.rb Formula/aclaude-a.rb
+          cp ../Formula/forestage-a.rb Formula/forestage-a.rb
 
-          sed -i "s/VERSION_PLACEHOLDER/$TAG/g" Formula/aclaude-a.rb
-          sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/aclaude-a.rb
-          sed -i "s/SHA256_ARM64_PLACEHOLDER/$SHA256_ARM64/g" Formula/aclaude-a.rb
+          sed -i "s/VERSION_PLACEHOLDER/$TAG/g" Formula/forestage-a.rb
+          sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/forestage-a.rb
+          sed -i "s/SHA256_ARM64_PLACEHOLDER/$SHA256_ARM64/g" Formula/forestage-a.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/aclaude-a.rb
-          git diff --cached --quiet || git commit -m "Update aclaude-a to $TAG"
+          git add Formula/forestage-a.rb
+          git diff --cached --quiet || git commit -m "Update forestage-a to $TAG"
           git push

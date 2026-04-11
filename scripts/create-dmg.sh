@@ -22,13 +22,13 @@ ln -s /Applications "$STAGING_DIR/Applications"
 rm -f "$OUTPUT_PATH"
 sync
 sleep 1
-hdiutil create -volname "Aclaude $VERSION" \
+hdiutil create -volname "Forestage $VERSION" \
   -srcfolder "$STAGING_DIR" \
   -ov -format UDZO \
   "$OUTPUT_PATH" || {
   echo "Retrying after hdiutil failure..."
   sleep 3
-  hdiutil create -volname "Aclaude $VERSION" \
+  hdiutil create -volname "Forestage $VERSION" \
     -srcfolder "$STAGING_DIR" \
     -ov -format UDZO \
     "$OUTPUT_PATH"
