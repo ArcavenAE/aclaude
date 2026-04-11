@@ -5,6 +5,7 @@ use aclaude::persona;
 use aclaude::portrait;
 use aclaude::session;
 use aclaude::session_cmd;
+use aclaude::tui;
 use aclaude::updater;
 use clap::{Parser, Subcommand};
 
@@ -88,6 +89,9 @@ enum Commands {
         #[arg(long)]
         clean: Option<usize>,
     },
+
+    /// Launch interactive TUI (prototype)
+    Tui,
 }
 
 #[derive(Subcommand)]
@@ -427,6 +431,17 @@ fn main() -> anyhow::Result<()> {
             println!("  commit:  {COMMIT}");
             println!("  built:   {BUILD_TIME}");
             println!("  channel: {CHANNEL}");
+        }
+
+        Some(Commands::Tui) => {
+            let cfg = config::load_config(cli_overrides)?;
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| aclaude::error::AclaudeError::Session {
+                    message: format!("failed to create async runtime: {e}"),
+                })?;
+            rt.block_on(tui::run_tui(&cfg))?;
         }
 
         Some(Commands::Versions { clean }) => {
