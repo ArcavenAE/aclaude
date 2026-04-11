@@ -60,7 +60,7 @@ for theme in "${themes[@]}"; do
     sha=$(cat "$DIST_DIR/${theme}.sha256")
     # stat -f%z (macOS) or stat -c%s (Linux)
     bytes=$(stat -f%z "$pack" 2>/dev/null || stat -c%s "$pack" 2>/dev/null)
-    persona_count=$(tar tzf "$pack" | grep "^original/.*\.png$" | wc -l | tr -d ' ')
+    persona_count=$(tar tzf "$pack" | grep "original/.*\.png$" | wc -l | tr -d ' ')
 
     $first || printf ',\n'
     first=false
@@ -69,7 +69,9 @@ for theme in "${themes[@]}"; do
 done
 printf '\n  },\n'
 
-# Personas section — parse theme YAMLs for role → filename-stem mapping
+# Personas section — parse theme YAMLs for role → filename-stem mapping.
+# Uses a single yq call per theme to extract all role→stem mappings at once,
+# avoiding O(roles × fields) subprocess overhead.
 printf '  "personas": {\n'
 first_theme=true
 for theme in "${themes[@]}"; do
@@ -79,34 +81,34 @@ for theme in "${themes[@]}"; do
         continue
     fi
 
+    # Extract all role→stem pairs. One yq call gets role, shortName, and OCEAN;
+    # bash handles the slug transformation (yq/Go lacks jq's ascii_downcase/sub).
+    persona_lines=""
+    while IFS=$'\t' read -r role short ocean_o ocean_c ocean_e ocean_a ocean_n; do
+        [[ -z "$role" || -z "$ocean_o" ]] && continue
+        slug=$(echo "$short" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g; s/^-*//; s/-*$//')
+        persona_lines+="${role}"$'\t'"${slug}-${ocean_o}${ocean_c}${ocean_e}${ocean_a}${ocean_n}"$'\n'
+    done < <(yq -r '
+      .agents | to_entries[] |
+      select(.value.ocean.O != null) |
+      [.key, (.value.shortName // (.value.character | split(" ") | .[0])),
+       .value.ocean.O, .value.ocean.C, .value.ocean.E, .value.ocean.A, .value.ocean.N] |
+      @tsv
+    ' "$yaml" 2>/dev/null)
+
+    [[ -z "$persona_lines" ]] && continue
+
     $first_theme || printf ',\n'
     first_theme=false
     printf '    "%s": {' "$theme"
 
     first_role=true
-    while IFS= read -r role; do
+    while IFS=$'\t' read -r role stem; do
         [[ -z "$role" ]] && continue
-
-        # Get shortName (fallback to character first word)
-        short=$(yq -r ".agents.\"$role\".shortName // (.agents.\"$role\".character | split(\" \") | .[0])" "$yaml" 2>/dev/null)
-        [[ -z "$short" || "$short" == "null" ]] && continue
-
-        # Get OCEAN scores
-        ocean_o=$(yq -r ".agents.\"$role\".ocean.O // empty" "$yaml" 2>/dev/null)
-        [[ -z "$ocean_o" ]] && continue
-        ocean_c=$(yq -r ".agents.\"$role\".ocean.C // empty" "$yaml" 2>/dev/null)
-        ocean_e=$(yq -r ".agents.\"$role\".ocean.E // empty" "$yaml" 2>/dev/null)
-        ocean_a=$(yq -r ".agents.\"$role\".ocean.A // empty" "$yaml" 2>/dev/null)
-        ocean_n=$(yq -r ".agents.\"$role\".ocean.N // empty" "$yaml" 2>/dev/null)
-
-        # Build slug: lowercase, non-alnum → dash, trim leading/trailing dashes
-        slug=$(echo "$short" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g; s/^-*//; s/-*$//')
-        stem="${slug}-${ocean_o}${ocean_c}${ocean_e}${ocean_a}${ocean_n}"
-
         $first_role || printf ', '
         first_role=false
         printf '"%s": "%s"' "$role" "$stem"
-    done < <(yq -r '.agents | keys | .[]' "$yaml" 2>/dev/null)
+    done <<< "$persona_lines"
 
     printf '}'
 done
