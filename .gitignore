@@ -19,3 +19,6 @@
 # tmux status cache
 .aclaude/tmux-status-*
 .aclaude/
+
+# Portrait distribution artifacts
+/dist/portraits/
