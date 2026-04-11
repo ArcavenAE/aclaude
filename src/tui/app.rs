@@ -676,13 +676,25 @@ pub fn render_conversation(frame: &mut Frame, state: &mut AppState, area: Rect) 
                                 } else {
                                     format!("{}", content.len())
                                 };
-                                let label = if *is_streaming {
-                                    format!("▸ Thinking ({char_count} chars)...")
+                                if *is_streaming {
+                                    let spinner =
+                                        state.status.spinner(state.frame_count).unwrap_or("⠋");
+                                    lines.push(Line::from(Span::styled(
+                                        format!("  {spinner} Thinking ({char_count} chars)..."),
+                                        Style::default().fg(Color::DarkGray),
+                                    )));
                                 } else {
-                                    format!("▸ Thinking ({char_count} chars)")
-                                };
+                                    lines.push(Line::from(Span::styled(
+                                        format!("  ▸ Thinking ({char_count} chars)"),
+                                        Style::default().fg(Color::DarkGray),
+                                    )));
+                                }
+                            } else if *is_streaming {
+                                // Thinking just started, no content yet
+                                let spinner =
+                                    state.status.spinner(state.frame_count).unwrap_or("⠋");
                                 lines.push(Line::from(Span::styled(
-                                    label,
+                                    format!("  {spinner} Thinking..."),
                                     Style::default().fg(Color::DarkGray),
                                 )));
                             }

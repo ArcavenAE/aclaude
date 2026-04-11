@@ -186,8 +186,14 @@ pub async fn run_tui(config: &AclaudeConfig) -> Result<()> {
                             InputAction::SlashCommand(SlashCmd::Help) => {
                                 let help_text = [
                                     "Commands: /exit /clear /cost /help /login /compact /model /persona",
-                                    "Keys: Ctrl+C quit, Ctrl+O expand tool, Shift+Tab permission mode",
-                                    "      PageUp/PageDown scroll, Up/Down history, Tab complete",
+                                    "Portrait: /persona portrait [on|off|top|bottom|size <s>]",
+                                    "",
+                                    "Keys:",
+                                    "  Ctrl+C quit         Ctrl+O expand tool   Shift+Tab permission mode",
+                                    "  Ctrl+A/E home/end   Ctrl+W del word      Ctrl+U clear line",
+                                    "  Ctrl+P portrait pos Alt+P portrait on/off Alt+S portrait size",
+                                    "  Alt+T thinking      PageUp/PageDown scroll",
+                                    "  Up/Down history     Tab complete          Mouse wheel scroll",
                                 ].join("\n");
                                 state.items.push(app::ConversationItem::SystemNotice { text: help_text });
                             }
