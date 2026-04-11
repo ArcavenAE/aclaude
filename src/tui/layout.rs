@@ -21,7 +21,7 @@
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-use super::app::PortraitSize;
+use super::app::{PortraitPosition, PortraitSize};
 
 /// Minimum terminal width to show portrait overlay.
 const MIN_WIDTH_FOR_PORTRAIT: u16 = 60;
@@ -53,6 +53,7 @@ pub struct TuiLayout {
 pub fn compute_layout(
     area: Rect,
     portrait_size: PortraitSize,
+    portrait_position: PortraitPosition,
     has_portrait: bool,
     has_permission_prompt: bool,
 ) -> TuiLayout {
@@ -83,13 +84,20 @@ pub fn compute_layout(
         (vertical[0], Rect::default(), vertical[1], vertical[2])
     };
 
-    // Portrait is an overlay in the upper-right corner of the conversation area
+    // Portrait overlay — positioned in upper-right or lower-right of conversation
     let portrait = if has_portrait && area.width >= MIN_WIDTH_FOR_PORTRAIT {
         let pw = portrait_column_width(portrait_size, area.width);
         let ph = (pw * 3 / 4).min(conversation.height / 2).max(4);
+        let x = conversation.x + conversation.width.saturating_sub(pw);
+        let y = match portrait_position {
+            PortraitPosition::TopRight => conversation.y,
+            PortraitPosition::BottomRight => {
+                conversation.y + conversation.height.saturating_sub(ph)
+            }
+        };
         Rect {
-            x: conversation.x + conversation.width.saturating_sub(pw),
-            y: conversation.y,
+            x,
+            y,
             width: pw,
             height: ph,
         }

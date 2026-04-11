@@ -15,6 +15,10 @@ const LOCAL_COMMANDS: &[&str] = &[
     "/persona portrait size medium",
     "/persona portrait size large",
     "/persona portrait size original",
+    "/persona portrait on",
+    "/persona portrait off",
+    "/persona portrait top",
+    "/persona portrait bottom",
 ];
 
 /// Action resulting from a key press.
@@ -59,6 +63,10 @@ pub enum SlashCmd {
     Cost,
     /// Set portrait size.
     PortraitSize(String),
+    /// Toggle portrait on/off.
+    PortraitToggle(bool),
+    /// Move portrait position (top/bottom).
+    PortraitMove(String),
     /// Forward to Claude Code as a user message (handles /compact, /model, etc.).
     ForwardToAgent(String),
     /// Unknown slash command.
@@ -360,11 +368,20 @@ fn parse_slash_command(text: &str) -> Option<SlashCmd> {
         _ => {}
     }
 
-    // /persona portrait size <size>
-    if parts.len() == 4 && cmd == "/persona" && parts[1] == "portrait" && parts[2] == "size" {
-        let size = parts[3].to_lowercase();
-        if ["small", "medium", "large", "original"].contains(&size.as_str()) {
-            return Some(SlashCmd::PortraitSize(size));
+    // /persona portrait <subcommand>
+    if parts.len() >= 3 && cmd == "/persona" && parts[1] == "portrait" {
+        match parts[2] {
+            "on" => return Some(SlashCmd::PortraitToggle(true)),
+            "off" => return Some(SlashCmd::PortraitToggle(false)),
+            "top" => return Some(SlashCmd::PortraitMove("top".to_string())),
+            "bottom" => return Some(SlashCmd::PortraitMove("bottom".to_string())),
+            "size" if parts.len() == 4 => {
+                let size = parts[3].to_lowercase();
+                if ["small", "medium", "large", "original"].contains(&size.as_str()) {
+                    return Some(SlashCmd::PortraitSize(size));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -469,7 +486,8 @@ mod tests {
     fn tab_complete_partial_prefix() {
         let mut buf = "/per".to_string();
         assert!(tab_complete(&mut buf, &[]));
-        assert_eq!(buf, "/persona portrait size ");
+        // Matches all /persona portrait variants (size, on, off, top, bottom)
+        assert_eq!(buf, "/persona portrait ");
     }
 
     #[test]

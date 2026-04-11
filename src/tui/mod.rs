@@ -215,6 +215,21 @@ pub async fn run_tui(config: &AclaudeConfig) -> Result<()> {
                                     }
                                 }
                             }
+                            InputAction::SlashCommand(SlashCmd::PortraitToggle(on)) => {
+                                state.portrait_visible = on;
+                                state.set_status(format!(
+                                    "Portrait {}",
+                                    if on { "on" } else { "off" }
+                                ));
+                            }
+                            InputAction::SlashCommand(SlashCmd::PortraitMove(pos)) => {
+                                state.portrait_position = match pos.as_str() {
+                                    "top" => app::PortraitPosition::TopRight,
+                                    "bottom" => app::PortraitPosition::BottomRight,
+                                    _ => state.portrait_position,
+                                };
+                                state.set_status(format!("Portrait: {pos}"));
+                            }
                             InputAction::SlashCommand(SlashCmd::Unknown(cmd)) => {
                                 // Forward unknown / commands to Claude Code — they
                                 // may be valid MCP/skill commands from system/init
@@ -269,13 +284,15 @@ pub async fn run_tui(config: &AclaudeConfig) -> Result<()> {
                 state.frame_count += 1;
                 state.tick_status_timeout();
 
-                let has_portrait = portrait_widget.as_ref().is_some_and(portrait_widget::PortraitWidget::has_image);
+                let has_portrait = state.portrait_visible
+                    && portrait_widget.as_ref().is_some_and(portrait_widget::PortraitWidget::has_image);
                 let has_perm_prompt = state.pending_permission.is_some();
 
                 terminal.draw(|frame| {
                     let tui_layout = compute_layout(
                         frame.area(),
                         state.portrait_size,
+                        state.portrait_position,
                         has_portrait,
                         has_perm_prompt,
                     );

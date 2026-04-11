@@ -40,6 +40,25 @@ impl PortraitSize {
     }
 }
 
+/// Portrait position in the conversation viewport.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PortraitPosition {
+    /// Upper-right corner of conversation area.
+    TopRight,
+    /// Lower-right corner, just above the input area.
+    BottomRight,
+}
+
+impl PortraitPosition {
+    /// Toggle between top and bottom.
+    pub fn toggle(self) -> Self {
+        match self {
+            Self::TopRight => Self::BottomRight,
+            Self::BottomRight => Self::TopRight,
+        }
+    }
+}
+
 /// Application status — drives visual feedback and input gating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppStatus {
@@ -201,6 +220,10 @@ pub struct AppState {
     pub input_buffer: String,
     /// Portrait size setting.
     pub portrait_size: PortraitSize,
+    /// Whether the portrait is visible.
+    pub portrait_visible: bool,
+    /// Portrait position (top-right or bottom-right).
+    pub portrait_position: PortraitPosition,
     /// Shared metrics from bridge.
     pub metrics: Arc<Mutex<SessionMetrics>>,
     /// Current application status.
@@ -229,6 +252,8 @@ impl AppState {
             items: Vec::new(),
             input_buffer: String::new(),
             portrait_size: PortraitSize::Medium,
+            portrait_visible: true,
+            portrait_position: PortraitPosition::TopRight,
             metrics,
             status: AppStatus::Connecting,
             scroll: ScrollState::default(),
