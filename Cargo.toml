@@ -37,6 +37,9 @@ crossterm = "0.29"
 ratatui-image = { version = "10.0", default-features = false, features = ["crossterm"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
+# Diff rendering
+similar = { version = "2", features = ["text"] }
+
 # Async (bridge subprocess I/O)
 tokio = { version = "1", features = ["sync", "rt", "macros", "io-util", "process", "time"] }
 

@@ -442,6 +442,23 @@ impl AppState {
             None
         }
     }
+
+    /// Toggle is_expanded on the most recent completed tool call.
+    pub fn toggle_last_tool_expand(&mut self) {
+        // Search backward through all turns for the last completed tool
+        for item in self.items.iter_mut().rev() {
+            if let ConversationItem::AssistantTurn { blocks, .. } = item {
+                for block in blocks.iter_mut().rev() {
+                    if let TurnBlock::ToolCall(tool) = block {
+                        if matches!(tool.status, ToolStatus::Complete { .. }) {
+                            tool.is_expanded = !tool.is_expanded;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────
@@ -572,7 +589,7 @@ pub fn render_conversation(frame: &mut Frame, state: &mut AppState, area: Rect) 
     frame.render_widget(paragraph, area);
 }
 
-/// Render a single tool call line in the conversation.
+/// Render a tool call block in the conversation.
 fn render_tool_call_line(lines: &mut Vec<Line>, tool: &ToolCallItem, frame_count: u64) {
     let elapsed = tool.started_at.elapsed().as_secs_f64();
 
@@ -606,28 +623,20 @@ fn render_tool_call_line(lines: &mut Vec<Line>, tool: &ToolCallItem, frame_count
             ]));
         }
         ToolStatus::Complete { elapsed_secs } => {
-            let preview: String = if tool.result_preview.is_empty() {
-                "done".to_string()
-            } else {
-                tool.result_preview
-                    .lines()
-                    .next()
-                    .unwrap_or("")
-                    .chars()
-                    .take(60)
-                    .collect()
-            };
+            // Header line with status
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("  ✓ {} ", tool.name),
                     Style::default().fg(Color::Green),
                 ),
                 Span::styled(
-                    format!("[{elapsed_secs:.1}s] "),
+                    format!("[{elapsed_secs:.1}s]"),
                     Style::default().fg(Color::DarkGray),
                 ),
-                Span::styled(preview, Style::default().fg(Color::DarkGray)),
             ]));
+            // Rich tool call rendering (diff, file content, command output)
+            let detail_lines = super::diff::render_tool_call(tool);
+            lines.extend(detail_lines);
         }
         ToolStatus::Error { message } => {
             lines.push(Line::from(vec![

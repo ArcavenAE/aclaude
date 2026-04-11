@@ -27,6 +27,8 @@ pub enum InputAction {
     PageDown,
     /// Scroll to bottom of conversation.
     ScrollEnd,
+    /// Toggle expanded output for most recent completed tool call.
+    ToggleExpand,
     /// No action (key consumed but no effect).
     None,
 }
@@ -202,6 +204,9 @@ pub fn handle_key(
     match (event.modifiers, event.code) {
         // Quit
         (KeyModifiers::CONTROL, KeyCode::Char('c')) => InputAction::Quit,
+
+        // Toggle expand tool output
+        (KeyModifiers::CONTROL, KeyCode::Char('o')) => InputAction::ToggleExpand,
 
         // Tab completion
         (_, KeyCode::Tab) => {

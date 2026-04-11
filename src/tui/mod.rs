@@ -5,6 +5,7 @@
 //! bridge — the bridge is shared infrastructure at `src/` level.
 
 pub mod app;
+pub mod diff;
 pub mod input;
 pub mod layout;
 pub mod portrait_widget;
@@ -192,6 +193,7 @@ pub async fn run_tui(config: &AclaudeConfig) -> Result<()> {
                             InputAction::SlashCommand(SlashCmd::Unknown(cmd)) => {
                                 state.status_message = Some(format!("Unknown command: {cmd}"));
                             }
+                            InputAction::ToggleExpand => state.toggle_last_tool_expand(),
                             InputAction::PageUp => state.scroll.page_up(),
                             InputAction::PageDown => state.scroll.page_down(),
                             InputAction::ScrollEnd => state.scroll.scroll_to_bottom(),
