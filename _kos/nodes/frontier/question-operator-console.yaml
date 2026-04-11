@@ -42,13 +42,13 @@ edges:
     type: supersedes
     note: "Resolves the two-audience split — same binary, render or don't"
   - target: decision-language-rust
-    type: informed-by
+    type: derives
     note: "Rust ownership of rendering surface is the enabler"
   - target: aae-orc::question-aclaude-ux-parity
-    type: reframes
+    type: supersedes
     note: "Not parity with Claude Code TUI — replacement of it"
   - target: aae-orc::question-aclaude-tui
-    type: reframes
+    type: supersedes
     note: "Not 'how to build a TUI' but 'build an operator console'"
 provenance:
   created_by: human

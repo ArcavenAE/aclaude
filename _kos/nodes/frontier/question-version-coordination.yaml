@@ -21,7 +21,7 @@ edges:
     type: derives
     note: "Local form of orchestrator F11"
   - target: decision-language-rust
-    type: informed-by
+    type: derives
     note: "Build mechanism changed but coordination question unchanged"
 provenance:
   created_by: human

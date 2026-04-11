@@ -1,5 +1,5 @@
 id: decision-language-rust
-type: decision
+type: element
 confidence: bedrock
 title: "aclaude is written in Rust"
 content: |
@@ -33,7 +33,7 @@ edges:
     type: supersedes
     note: "Rust rewrite completes the break from pennyfarthing's stack"
   - target: question-two-audience
-    type: informs
+    type: supports
     note: "Language resolved; audience question remains"
 graveyard:
   approach: "TypeScript + bun compile + Agent SDK"

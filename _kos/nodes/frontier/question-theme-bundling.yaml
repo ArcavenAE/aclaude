@@ -28,7 +28,7 @@ edges:
     type: derives
     note: "Pack format depends on persona model"
   - target: decision-language-rust
-    type: informed-by
+    type: derives
     note: "Rust embedding is more reliable than bun compile virtual FS"
 provenance:
   created_by: human

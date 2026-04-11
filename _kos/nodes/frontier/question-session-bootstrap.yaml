@@ -29,7 +29,7 @@ edges:
     type: derives
     note: "Human and agent bootstrap are fundamentally different"
   - target: decision-language-rust
-    type: informed-by
+    type: derives
     note: "Subprocess protocol replaces Agent SDK integration"
 provenance:
   created_by: human

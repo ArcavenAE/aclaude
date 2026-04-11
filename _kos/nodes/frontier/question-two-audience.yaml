@@ -22,7 +22,7 @@ content: |
   passthrough for agents.
 edges:
   - target: decision-language-rust
-    type: informed-by
+    type: derives
     note: "Language resolved — audience question is now about runtime mode"
   - target: aae-orc::question-aclaude-ux-parity
     type: derives
