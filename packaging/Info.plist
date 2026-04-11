@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.arcavenae.aclaude</string>
+	<string>com.arcavenae.forestage</string>
 	<key>CFBundleName</key>
-	<string>Aclaude</string>
+	<string>Forestage</string>
 	<key>CFBundleDisplayName</key>
-	<string>Aclaude</string>
+	<string>Forestage</string>
 	<key>CFBundleExecutable</key>
-	<string>aclaude</string>
+	<string>forestage</string>
 	<key>CFBundleVersion</key>
 	<string>VERSION_PLACEHOLDER</string>
 	<key>CFBundleShortVersionString</key>

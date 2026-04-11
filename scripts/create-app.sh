@@ -16,14 +16,14 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-APP_BUNDLE="${OUTPUT_DIR}/Aclaude.app"
+APP_BUNDLE="${OUTPUT_DIR}/Forestage.app"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-cp "$BINARY_PATH" "$APP_BUNDLE/Contents/MacOS/aclaude"
-chmod +x "$APP_BUNDLE/Contents/MacOS/aclaude"
+cp "$BINARY_PATH" "$APP_BUNDLE/Contents/MacOS/forestage"
+chmod +x "$APP_BUNDLE/Contents/MacOS/forestage"
 
 sed "s/VERSION_PLACEHOLDER/$VERSION/g" "$PROJECT_ROOT/packaging/Info.plist" \
   > "$APP_BUNDLE/Contents/Info.plist"

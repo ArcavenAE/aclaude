@@ -23,11 +23,11 @@ STAGING_DIR=$(mktemp -d)
 trap 'rm -rf "$STAGING_DIR"' EXIT
 
 mkdir -p "$STAGING_DIR/usr/local/bin"
-cp "$BINARY_PATH" "$STAGING_DIR/usr/local/bin/aclaude"
-chmod +x "$STAGING_DIR/usr/local/bin/aclaude"
+cp "$BINARY_PATH" "$STAGING_DIR/usr/local/bin/forestage"
+chmod +x "$STAGING_DIR/usr/local/bin/forestage"
 
 pkgbuild --root "$STAGING_DIR" \
-  --identifier com.arcavenae.aclaude \
+  --identifier com.arcavenae.forestage \
   --version "$VERSION" \
   --install-location / \
   --sign "$SIGNING_IDENTITY" \

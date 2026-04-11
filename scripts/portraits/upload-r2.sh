@@ -3,7 +3,7 @@
 #
 # Prerequisites:
 #   - rclone configured with an "r2" remote (see below)
-#   - R2 bucket "aclaude-portraits" created (wrangler r2 bucket create aclaude-portraits)
+#   - R2 bucket "forestage-portraits" created (wrangler r2 bucket create forestage-portraits)
 #
 # rclone setup (one-time):
 #   rclone config create r2 s3 \
@@ -36,18 +36,18 @@ echo "Uploading $pack_count theme packs + manifest to R2..."
 
 echo ""
 echo "--- Theme packs (immutable, 7d cache) ---"
-rclone sync "$DIST_DIR/" r2:aclaude-portraits/v1/themes/ \
+rclone sync "$DIST_DIR/" r2:forestage-portraits/v1/themes/ \
     --include "*.tar.gz" --include "*.sha256" \
     --header-upload "Cache-Control: public, max-age=604800, immutable" \
     --progress
 
 echo ""
 echo "--- Manifest (1h cache, etag-gated) ---"
-rclone copyto "$DIST_DIR/manifest.json" r2:aclaude-portraits/v1/manifest.json \
+rclone copyto "$DIST_DIR/manifest.json" r2:forestage-portraits/v1/manifest.json \
     --header-upload "Cache-Control: public, max-age=3600" \
     --progress
 
 echo ""
 echo "Done. Verify:"
-echo "  curl -sI https://portraits.aclaude.dev/v1/manifest.json | head -10"
-echo "  curl -s https://portraits.aclaude.dev/v1/manifest.json | head -5"
+echo "  curl -sI https://portraits.forestage.dev/v1/manifest.json | head -10"
+echo "  curl -s https://portraits.forestage.dev/v1/manifest.json | head -5"

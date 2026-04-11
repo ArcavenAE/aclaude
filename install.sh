@@ -1,18 +1,18 @@
 #!/bin/bash
-# aclaude installer — downloads the latest release from GitHub and installs it.
+# forestage installer — downloads the latest release from GitHub and installs it.
 #
 # Install:
-#   curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --alpha
+#   curl -fsSL https://raw.githubusercontent.com/arcavenae/forestage/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/arcavenae/forestage/main/install.sh | bash -s -- --alpha
 #
 # Uninstall:
-#   curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --uninstall
+#   curl -fsSL https://raw.githubusercontent.com/arcavenae/forestage/main/install.sh | bash -s -- --uninstall
 #
 set -euo pipefail
 
 GITHUB_OWNER="arcavenae"
-GITHUB_REPO="aclaude"
-INSTALL_DIR="$HOME/.local/share/aclaude"
+GITHUB_REPO="forestage"
+INSTALL_DIR="$HOME/.local/share/forestage"
 VERSIONS_DIR="$INSTALL_DIR/versions"
 SYMLINK_DIR="$HOME/.local/bin"
 
@@ -26,9 +26,9 @@ for arg in "$@"; do
     --help|-h)
       echo "Usage: install.sh [--alpha] [--uninstall]"
       echo ""
-      echo "  --alpha      Install the alpha channel (aclaude-a)"
-      echo "  --uninstall  Remove aclaude and all versions"
-      echo "  (default)    Install the stable channel (aclaude)"
+      echo "  --alpha      Install the alpha channel (forestage-a)"
+      echo "  --uninstall  Remove forestage and all versions"
+      echo "  (default)    Install the stable channel (forestage)"
       exit 0
       ;;
     *)
@@ -40,18 +40,18 @@ done
 
 # Determine binary name from channel
 if [[ "$CHANNEL" = "alpha" ]]; then
-  BIN_NAME="aclaude-a"
+  BIN_NAME="forestage-a"
 else
-  BIN_NAME="aclaude"
+  BIN_NAME="forestage"
 fi
 
 # --- Uninstall ---
 if [[ "$UNINSTALL" = true ]]; then
-  echo "Uninstalling aclaude..."
+  echo "Uninstalling forestage..."
   echo ""
 
   # Remove symlinks
-  for name in aclaude aclaude-a; do
+  for name in forestage forestage-a; do
     link="$SYMLINK_DIR/$name"
     if [[ -L "$link" ]] || [[ -f "$link" ]]; then
       echo "  Removing $link"
@@ -67,14 +67,14 @@ if [[ "$UNINSTALL" = true ]]; then
 
   # Note: config is preserved
   echo ""
-  echo "aclaude removed."
+  echo "forestage removed."
   echo ""
-  echo "Config preserved at ~/.config/aclaude/ (delete manually if unwanted)."
-  echo "Portraits preserved at ~/.local/share/aclaude/portraits/ (if they existed,"
+  echo "Config preserved at ~/.config/forestage/ (delete manually if unwanted)."
+  echo "Portraits preserved at ~/.local/share/forestage/portraits/ (if they existed,"
   echo "they were removed with the data directory above)."
   echo ""
   echo "If installed via Homebrew, also run:"
-  echo "  brew uninstall aclaude aclaude-a"
+  echo "  brew uninstall forestage forestage-a"
   exit 0
 fi
 
@@ -221,6 +221,6 @@ echo ""
 echo "Auth: uses your Claude Code credentials, or set ANTHROPIC_API_KEY."
 echo ""
 echo "To uninstall:"
-echo "  curl -fsSL https://raw.githubusercontent.com/arcavenae/aclaude/main/install.sh | bash -s -- --uninstall"
+echo "  curl -fsSL https://raw.githubusercontent.com/arcavenae/forestage/main/install.sh | bash -s -- --uninstall"
 echo ""
 echo "Run '${BIN_NAME} --version' to verify."
