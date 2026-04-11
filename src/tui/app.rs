@@ -136,15 +136,17 @@ pub enum AppStatus {
 
 impl AppStatus {
     /// Whether the input field should accept typed characters.
+    /// Permissive — only blocks on fatal error. The user should always
+    /// be able to type; the subprocess accepts input regardless of state.
     pub fn accepts_input(self) -> bool {
-        self == Self::Ready
+        self != Self::Error
     }
 
-    /// Spinner character for non-ready states.
+    /// Spinner character for active states.
     pub fn spinner(self, frame_count: u64) -> Option<&'static str> {
         const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         match self {
-            Self::Connecting | Self::Thinking | Self::Streaming | Self::ToolRunning => {
+            Self::Thinking | Self::Streaming | Self::ToolRunning => {
                 Some(FRAMES[(frame_count as usize) % FRAMES.len()])
             }
             _ => None,
@@ -332,6 +334,11 @@ impl AppState {
 
     /// Apply a bridge event to update state.
     pub fn apply_event(&mut self, event: &BridgeEvent) {
+        // Any event arriving means we're connected
+        if self.status == AppStatus::Connecting {
+            self.status = AppStatus::Ready;
+        }
+
         match event {
             BridgeEvent::SessionInit {
                 available_slash_commands,
@@ -342,12 +349,7 @@ impl AppState {
                 self.available_slash_commands = available_slash_commands.clone();
                 self.permission_mode = PermissionMode::parse_mode(permission_mode);
             }
-            BridgeEvent::Core(ClaudeEvent::System { .. }) => {
-                // Legacy system event without init subtype
-                if self.status == AppStatus::Connecting {
-                    self.status = AppStatus::Ready;
-                }
-            }
+            BridgeEvent::Core(ClaudeEvent::System { .. }) => {}
             BridgeEvent::MessageStart => {
                 self.status = AppStatus::Thinking;
                 self.ensure_active_turn();
@@ -909,8 +911,7 @@ fn render_tool_call_line(lines: &mut Vec<Line>, tool: &ToolCallItem, frame_count
 /// Render the input area.
 pub fn render_input(frame: &mut Frame, state: &AppState, area: Rect) {
     let placeholder = match state.status {
-        AppStatus::Connecting => "Connecting...",
-        AppStatus::Ready => "Type a message...",
+        AppStatus::Connecting | AppStatus::Ready => "Type a message...",
         AppStatus::Thinking | AppStatus::Streaming | AppStatus::ToolRunning => "Waiting...",
         AppStatus::Error => "Error — press Ctrl+C to exit",
     };
