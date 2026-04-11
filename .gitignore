@@ -20,5 +20,8 @@
 .forestage/tmux-status-*
 .forestage/
 
+# Cloudflare Wrangler local state
+.wrangler/
+
 # Portrait distribution artifacts
 /dist/portraits/
