@@ -13,6 +13,8 @@ pub mod portrait_widget;
 pub mod scroll;
 
 use std::io;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{
@@ -134,12 +136,28 @@ pub async fn run_tui(config: &AclaudeConfig) -> Result<()> {
     let mut history = InputHistory::new();
     let mut text_batcher = TextBatcher::new();
 
-    // Terminal event reader channel
+    // Terminal event reader channel.
+    // Uses poll() with a timeout so the thread can check the shutdown flag
+    // and exit cleanly — without this, event::read() blocks indefinitely
+    // and the tokio runtime hangs on shutdown until the user presses a key.
+    let term_shutdown = Arc::new(AtomicBool::new(false));
+    let term_shutdown_flag = Arc::clone(&term_shutdown);
     let (term_tx, mut term_rx) = tokio::sync::mpsc::channel::<Event>(64);
     tokio::task::spawn_blocking(move || {
-        while let Ok(ev) = event::read() {
-            if term_tx.blocking_send(ev).is_err() {
+        loop {
+            if term_shutdown_flag.load(Ordering::Relaxed) {
                 break;
+            }
+            // Poll with 100ms timeout to periodically check shutdown flag
+            if event::poll(Duration::from_millis(100)).unwrap_or(false) {
+                match event::read() {
+                    Ok(ev) => {
+                        if term_tx.blocking_send(ev).is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
             }
         }
     });
@@ -446,7 +464,8 @@ pub async fn run_tui(config: &AclaudeConfig) -> Result<()> {
         }
     };
 
-    // Cleanup
+    // Cleanup — signal terminal reader thread to exit before waiting
+    term_shutdown.store(true, Ordering::Relaxed);
     session.shutdown().await;
     let _ = execute!(
         io::stdout(),

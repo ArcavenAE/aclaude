@@ -831,8 +831,24 @@ pub fn render_conversation(frame: &mut Frame, state: &mut AppState, area: Rect) 
         }
     }
 
+    // Estimate wrapped height — text.height() only counts Line objects,
+    // but with Wrap enabled, long lines occupy multiple rows.
+    let content_height: u16 = if area.width == 0 {
+        lines.len() as u16
+    } else {
+        lines
+            .iter()
+            .map(|line| {
+                let w = line.width() as u16;
+                if w == 0 {
+                    1
+                } else {
+                    (w.saturating_sub(1) / area.width) + 1
+                }
+            })
+            .sum()
+    };
     let text = Text::from(lines);
-    let content_height = text.height() as u16;
     state.scroll.set_viewport_height(area.height);
     state.scroll.set_content_height(content_height);
 

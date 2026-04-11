@@ -170,6 +170,14 @@ fn render_markdown(text: &str) -> Vec<Line<'static>> {
         }
     }
 
+    // Close any unclosed code block (truncated response or streaming)
+    if matches!(state, State::InCodeBlock { .. }) {
+        lines.push(Line::from(Span::styled(
+            "└─── (unterminated)",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
     lines
 }
 
@@ -350,6 +358,15 @@ mod tests {
         // Even with weird input, should not panic
         let result = render_markdown_safe("```\n```\n```\n```");
         assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn unclosed_code_block_auto_closes() {
+        let text = "```rust\nfn main() {}";
+        let lines = render_markdown(text);
+        assert_eq!(lines.len(), 3);
+        let last = lines.last().unwrap().to_string();
+        assert!(last.contains("unterminated"));
     }
 
     #[test]

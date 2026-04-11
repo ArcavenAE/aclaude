@@ -102,17 +102,24 @@ impl SessionMetrics {
     }
 }
 
+/// Type of an open content block, tracked by index.
+#[derive(Debug)]
+#[allow(dead_code)] // Tool fields retained for Debug output and future richer close events
+enum OpenBlock {
+    Tool { id: String, name: String },
+    Thinking,
+    Text,
+}
+
 /// Stateful NDJSON parser for the Claude Code streaming protocol.
 ///
-/// Tracks open content blocks across events because `content_block_stop`
-/// does not carry the block type or tool_use_id — the parser must correlate
-/// by remembering what's currently open.
+/// Tracks open content blocks by index so `content_block_stop` (which
+/// carries only the index) can emit the correct close event. This handles
+/// the case where thinking and tool blocks are interleaved.
 #[derive(Debug, Default)]
 pub struct BridgeParser {
-    /// Currently open tool call: (tool_use_id, tool_name).
-    pending_tool: Option<(String, String)>,
-    /// Whether a thinking block is currently open.
-    pending_thinking: bool,
+    /// Open content blocks keyed by their `index` field.
+    open_blocks: std::collections::HashMap<u64, OpenBlock>,
 }
 
 impl BridgeParser {
@@ -132,9 +139,10 @@ impl BridgeParser {
         match event_type {
             "system" => self.parse_system(&v),
             "message_start" => Some(BridgeEvent::MessageStart),
-            "message_stop" => Some(BridgeEvent::MessageStop {
-                stop_reason: String::new(),
-            }),
+            // message_stop is redundant — message_delta carries the
+            // stop_reason and always arrives first. Emitting from both
+            // would double-finalize the turn.
+            "message_stop" => None,
             "message_delta" => {
                 let stop_reason = v
                     .get("delta")
@@ -146,7 +154,7 @@ impl BridgeParser {
             }
             "content_block_start" => self.parse_content_block_start(&v),
             "content_block_delta" => self.parse_content_block_delta(&v),
-            "content_block_stop" => self.parse_content_block_stop(),
+            "content_block_stop" => self.parse_content_block_stop(&v),
             "rate_limit_event" => {
                 let status = v
                     .get("status")
@@ -225,6 +233,7 @@ impl BridgeParser {
     }
 
     fn parse_content_block_start(&mut self, v: &serde_json::Value) -> Option<BridgeEvent> {
+        let index = v.get("index").and_then(serde_json::Value::as_u64)?;
         let block = v.get("content_block")?;
         let block_type = block.get("type")?.as_str()?;
 
@@ -240,14 +249,23 @@ impl BridgeParser {
                     .and_then(|s| s.as_str())
                     .unwrap_or("")
                     .to_string();
-                self.pending_tool = Some((id.clone(), name.clone()));
+                self.open_blocks.insert(
+                    index,
+                    OpenBlock::Tool {
+                        id: id.clone(),
+                        name: name.clone(),
+                    },
+                );
                 Some(BridgeEvent::ToolCallStart { id, name })
             }
             "thinking" => {
-                self.pending_thinking = true;
+                self.open_blocks.insert(index, OpenBlock::Thinking);
                 Some(BridgeEvent::ThinkingStart)
             }
-            "text" => None, // text block start carries no useful data
+            "text" => {
+                self.open_blocks.insert(index, OpenBlock::Text);
+                None // text block start carries no useful data
+            }
             _ => None,
         }
     }
@@ -283,16 +301,13 @@ impl BridgeParser {
         }
     }
 
-    fn parse_content_block_stop(&mut self) -> Option<BridgeEvent> {
-        if self.pending_tool.take().is_some() {
-            return Some(BridgeEvent::ToolCallStop);
+    fn parse_content_block_stop(&mut self, v: &serde_json::Value) -> Option<BridgeEvent> {
+        let index = v.get("index").and_then(serde_json::Value::as_u64)?;
+        match self.open_blocks.remove(&index) {
+            Some(OpenBlock::Tool { .. }) => Some(BridgeEvent::ToolCallStop),
+            Some(OpenBlock::Thinking) => Some(BridgeEvent::ThinkingStop),
+            Some(OpenBlock::Text) | None => None,
         }
-        if self.pending_thinking {
-            self.pending_thinking = false;
-            return Some(BridgeEvent::ThinkingStop);
-        }
-        // Text block stop — no event needed
-        None
     }
 
     fn parse_hook_event(&self, v: &serde_json::Value) -> Option<BridgeEvent> {
@@ -388,7 +403,10 @@ mod tests {
             }
             other => panic!("expected ToolCallStart, got {other:?}"),
         }
-        assert!(p.pending_tool.is_some());
+        assert!(matches!(
+            p.open_blocks.get(&1),
+            Some(OpenBlock::Tool { .. })
+        ));
 
         // Input delta
         let line = r#"{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"path\":\"src/"}}"#;
@@ -405,7 +423,7 @@ mod tests {
             Some(BridgeEvent::ToolCallStop) => {}
             other => panic!("expected ToolCallStop, got {other:?}"),
         }
-        assert!(p.pending_tool.is_none());
+        assert!(p.open_blocks.is_empty());
     }
 
     #[test]
@@ -414,7 +432,7 @@ mod tests {
 
         let line = r#"{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}"#;
         assert!(matches!(p.parse(line), Some(BridgeEvent::ThinkingStart)));
-        assert!(p.pending_thinking);
+        assert!(matches!(p.open_blocks.get(&0), Some(OpenBlock::Thinking)));
 
         let line = r#"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me think..."}}"#;
         match p.parse(line) {
@@ -426,7 +444,7 @@ mod tests {
 
         let line = r#"{"type":"content_block_stop","index":0}"#;
         assert!(matches!(p.parse(line), Some(BridgeEvent::ThinkingStop)));
-        assert!(!p.pending_thinking);
+        assert!(p.open_blocks.is_empty());
     }
 
     #[test]
@@ -488,10 +506,8 @@ mod tests {
             p.parse(r#"{"type":"message_start","message":{"id":"msg_1","role":"assistant"}}"#),
             Some(BridgeEvent::MessageStart)
         ));
-        assert!(matches!(
-            p.parse(r#"{"type":"message_stop"}"#),
-            Some(BridgeEvent::MessageStop { .. })
-        ));
+        // message_stop is suppressed — message_delta carries stop_reason
+        assert!(p.parse(r#"{"type":"message_stop"}"#).is_none());
     }
 
     #[test]
@@ -524,11 +540,41 @@ mod tests {
     #[test]
     fn content_block_stop_without_pending_returns_none() {
         let mut p = parser();
-        // No pending tool or thinking — text block stop
+        // No open block at this index — returns None
         assert!(
             p.parse(r#"{"type":"content_block_stop","index":0}"#)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn content_block_stop_uses_index_not_priority() {
+        let mut p = parser();
+
+        // Open thinking at index 0
+        p.parse(r#"{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}"#);
+        assert!(matches!(p.open_blocks.get(&0), Some(OpenBlock::Thinking)));
+
+        // Open tool at index 1
+        p.parse(r#"{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t1","name":"Edit","input":{}}}"#);
+        assert!(matches!(
+            p.open_blocks.get(&1),
+            Some(OpenBlock::Tool { .. })
+        ));
+
+        // Stop index 0 — should close thinking, not tool
+        let event = p.parse(r#"{"type":"content_block_stop","index":0}"#);
+        assert!(matches!(event, Some(BridgeEvent::ThinkingStop)));
+        // Tool at index 1 still open
+        assert!(matches!(
+            p.open_blocks.get(&1),
+            Some(OpenBlock::Tool { .. })
+        ));
+
+        // Stop index 1 — should close tool
+        let event = p.parse(r#"{"type":"content_block_stop","index":1}"#);
+        assert!(matches!(event, Some(BridgeEvent::ToolCallStop)));
+        assert!(p.open_blocks.is_empty());
     }
 
     #[test]
