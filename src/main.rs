@@ -2,6 +2,7 @@
 
 use clap::{Parser, Subcommand};
 use forestage::config;
+use forestage::download;
 use forestage::persona;
 use forestage::portrait;
 use forestage::session;
@@ -96,6 +97,33 @@ enum Commands {
 
     /// Launch interactive TUI (prototype)
     Tui,
+
+    /// Manage portrait images
+    Portraits {
+        #[command(subcommand)]
+        action: PortraitAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum PortraitAction {
+    /// Download portrait pack for a theme
+    Download {
+        /// Theme slug (e.g. "dune"). Omit for current theme.
+        theme: Option<String>,
+        /// Download all available themes
+        #[arg(long)]
+        all: bool,
+    },
+    /// Show portrait cache status
+    Status,
+    /// List available themes from remote manifest
+    ListRemote,
+    /// Remove cached portraits for a theme
+    Clean {
+        /// Theme to clean (omit for all)
+        theme: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -249,6 +277,11 @@ fn main() -> anyhow::Result<()> {
                 let usage = session::start_streaming_session(&cfg, &cli.claude_args)?;
                 usage.print_summary();
             } else {
+                // Auto-download portraits before interactive session
+                if let Err(e) = download::ensure_portraits(&cfg.persona.theme, &cfg.portrait) {
+                    eprintln!("portrait download: {e}");
+                }
+
                 // Default: interactive session — mode selects TUI
                 match cfg.session.mode.as_str() {
                     "claude" => {
@@ -301,6 +334,12 @@ fn main() -> anyhow::Result<()> {
                 portrait_size,
             } => {
                 let cfg = config::load_config(cli_overrides)?;
+
+                // Auto-download portraits if showing and not cached
+                if show_portrait {
+                    let _ = download::ensure_portraits(&name, &cfg.portrait);
+                }
+
                 let theme = persona::load_theme(&name)?;
                 let agent_data = persona::get_agent(&theme, &agent)?;
                 let portraits = portrait::resolve_portrait(&name, agent_data, Some(&agent));
@@ -471,6 +510,78 @@ fn main() -> anyhow::Result<()> {
                     message: format!("failed to create async runtime: {e}"),
                 })?;
             rt.block_on(tui::run_tui(&cfg))?;
+        }
+
+        Some(Commands::Portraits { action }) => {
+            let cfg = config::load_config(cli_overrides)?;
+            match action {
+                PortraitAction::Download { theme, all } => {
+                    if all {
+                        let (downloaded, skipped) = download::download_all(&cfg.portrait)?;
+                        println!("Downloaded {downloaded} theme(s), {skipped} already cached");
+                    } else {
+                        let theme_slug = theme.unwrap_or_else(|| cfg.persona.theme.clone());
+                        match download::ensure_portraits(&theme_slug, &cfg.portrait)? {
+                            true => println!("Portraits ready for {theme_slug}"),
+                            false => println!("No portraits available for {theme_slug}"),
+                        }
+                    }
+                }
+                PortraitAction::Status => {
+                    let cache_dir = portrait::portrait_cache_dir();
+                    let (themes, images) = portrait::cache_status();
+                    println!("Portrait cache: {}", cache_dir.display());
+                    println!("Themes with portraits: {themes}");
+                    println!("Total images: {images}");
+                    println!(
+                        "Auto-download: {}",
+                        if cfg.portrait.auto_download {
+                            "on"
+                        } else {
+                            "off"
+                        }
+                    );
+                    println!("Display mode: {}", cfg.portrait.display);
+                }
+                PortraitAction::ListRemote => {
+                    let themes = download::list_remote()?;
+                    if themes.is_empty() {
+                        println!("Could not fetch remote manifest");
+                    } else {
+                        println!("{} themes available:", themes.len());
+                        for (name, count) in &themes {
+                            let cached = portrait::portrait_cache_dir()
+                                .join(name)
+                                .join(".complete")
+                                .exists();
+                            let status = if cached { "cached" } else { "remote" };
+                            println!("  {name:<30} {count:>2} personas  [{status}]");
+                        }
+                    }
+                }
+                PortraitAction::Clean { theme } => {
+                    if let Some(slug) = theme {
+                        if download::clean_theme(&slug)? {
+                            println!("Cleaned portrait cache for {slug}");
+                        } else {
+                            println!("No cached portraits for {slug}");
+                        }
+                    } else {
+                        let cache_dir = portrait::portrait_cache_dir();
+                        if cache_dir.exists() {
+                            let (themes, _) = portrait::cache_status();
+                            std::fs::remove_dir_all(&cache_dir).map_err(|e| {
+                                forestage::error::ForestageError::Session {
+                                    message: format!("failed to clean portrait cache: {e}"),
+                                }
+                            })?;
+                            println!("Cleaned all portrait cache ({themes} themes)");
+                        } else {
+                            println!("Portrait cache is empty");
+                        }
+                    }
+                }
+            }
         }
 
         Some(Commands::Versions { clean }) => {

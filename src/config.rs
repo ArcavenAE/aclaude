@@ -84,6 +84,9 @@ pub struct PortraitConfig {
     /// Image display mode: "auto" (detect terminal), "always", "never".
     #[serde(default = "default_portrait_display")]
     pub display: String,
+    /// Auto-download missing portrait packs on session start.
+    #[serde(default = "default_true")]
+    pub auto_download: bool,
 }
 
 fn default_portrait_display() -> String {
@@ -94,6 +97,7 @@ impl Default for PortraitConfig {
     fn default() -> Self {
         Self {
             display: default_portrait_display(),
+            auto_download: true,
         }
     }
 }
