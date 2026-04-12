@@ -40,9 +40,13 @@ echo "--- Theme packs (immutable, 7d cache) ---"
 # without this flag, rclone falls back to CreateBucket (also denied).
 # sync works without it (ListObjects confirms bucket), but adding it
 # here for consistency.
+# Content-Type must be application/octet-stream, NOT application/gzip.
+# Cloudflare transparently decompresses/recompresses application/gzip
+# responses at the edge, mangling bytes and breaking SHA256 verification.
 rclone sync "$DIST_DIR/" r2:forestage-portraits/v1/themes/ \
     --include "*.tar.gz" --include "*.sha256" \
     --s3-no-check-bucket \
+    --header-upload "Content-Type: application/octet-stream" \
     --progress
 
 echo ""
