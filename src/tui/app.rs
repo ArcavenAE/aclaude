@@ -852,11 +852,26 @@ pub fn render_conversation(frame: &mut Frame, state: &mut AppState, area: Rect) 
     state.scroll.set_viewport_height(area.height);
     state.scroll.set_content_height(content_height);
 
+    // Bottom-anchor: when content is shorter than the viewport, render
+    // in a sub-rect at the bottom so the conversation sits above the
+    // input, not pinned to the top with blank space below.
+    let render_area = if content_height < area.height {
+        let offset = area.height - content_height;
+        Rect {
+            x: area.x,
+            y: area.y + offset,
+            width: area.width,
+            height: content_height,
+        }
+    } else {
+        area
+    };
+
     let paragraph = Paragraph::new(text)
         .wrap(Wrap { trim: false })
         .scroll((state.scroll.offset, 0));
 
-    frame.render_widget(paragraph, area);
+    frame.render_widget(paragraph, render_area);
 }
 
 /// Render a tool call block in the conversation.
