@@ -16,8 +16,8 @@ const STATUS_HEIGHT: u16 = 1;
 /// Permission prompt height in rows (when active).
 const PERMISSION_HEIGHT: u16 = 6;
 
-/// Portrait margin from the terminal edge (right and top/bottom).
-const PORTRAIT_MARGIN: u16 = 1;
+/// Portrait margin from the right terminal edge.
+const PORTRAIT_MARGIN_RIGHT: u16 = 1;
 
 /// Computed layout areas for a single frame.
 pub struct TuiLayout {
@@ -115,10 +115,10 @@ pub fn compute_layout(
 /// Compute the portrait overlay Rect.
 ///
 /// Uses actual image cell dimensions for a tight fit. The right edge is
-/// always anchored at `terminal_width - PORTRAIT_MARGIN` regardless of
+/// always anchored at `terminal_width - PORTRAIT_MARGIN_RIGHT` regardless of
 /// portrait size. Position:
-/// - TopRight: anchored to top-right with margin
-/// - BottomRight: anchored just above the input area's top border
+/// - TopRight: flush with top of conversation area
+/// - BottomRight: flush against the input area's top border
 fn compute_portrait_rect(
     portrait_position: PortraitPosition,
     portrait_cell_size: Option<(u16, u16)>,
@@ -133,17 +133,17 @@ fn compute_portrait_rect(
         return Rect::default();
     }
 
-    // Right edge anchored to terminal right minus margin
+    // Right edge: portrait right side sits at terminal right minus margin
     let right_edge = conversation.x + conversation.width;
     let x = right_edge
-        .saturating_sub(pw)
-        .saturating_sub(PORTRAIT_MARGIN);
+        .saturating_sub(PORTRAIT_MARGIN_RIGHT)
+        .saturating_sub(pw);
 
     let y = match portrait_position {
-        PortraitPosition::TopRight => conversation.y + PORTRAIT_MARGIN,
+        PortraitPosition::TopRight => conversation.y,
         PortraitPosition::BottomRight => {
-            // Just above the input area's top border
-            input.y.saturating_sub(ph).saturating_sub(PORTRAIT_MARGIN)
+            // Flush against the input area's top border
+            input.y.saturating_sub(ph)
         }
     };
 
@@ -152,5 +152,91 @@ fn compute_portrait_rect(
         y,
         width: pw,
         height: ph,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rect(x: u16, y: u16, w: u16, h: u16) -> Rect {
+        Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        }
+    }
+
+    #[test]
+    fn portrait_top_right_flush_with_corner() {
+        let conversation = rect(0, 0, 80, 30);
+        let input = rect(0, 30, 80, 3);
+        let r = compute_portrait_rect(
+            PortraitPosition::TopRight,
+            Some((20, 15)),
+            conversation,
+            input,
+        );
+        // y flush with conversation top (no margin)
+        assert_eq!(r.y, 0);
+        // right edge: 80 - 1 (margin) - 20 (width) = 59
+        assert_eq!(r.x, 59);
+        assert_eq!(r.width, 20);
+        assert_eq!(r.height, 15);
+    }
+
+    #[test]
+    fn portrait_bottom_right_flush_against_input() {
+        let conversation = rect(0, 0, 80, 30);
+        let input = rect(0, 30, 80, 3);
+        let r = compute_portrait_rect(
+            PortraitPosition::BottomRight,
+            Some((20, 15)),
+            conversation,
+            input,
+        );
+        // y: input.y (30) - height (15) = 15, no extra margin
+        assert_eq!(r.y, 15);
+        assert_eq!(r.x, 59);
+    }
+
+    #[test]
+    fn portrait_none_returns_default() {
+        let r = compute_portrait_rect(
+            PortraitPosition::TopRight,
+            None,
+            rect(0, 0, 80, 30),
+            rect(0, 30, 80, 3),
+        );
+        assert_eq!(r, Rect::default());
+    }
+
+    #[test]
+    fn portrait_zero_size_returns_default() {
+        let r = compute_portrait_rect(
+            PortraitPosition::TopRight,
+            Some((0, 10)),
+            rect(0, 0, 80, 30),
+            rect(0, 30, 80, 3),
+        );
+        assert_eq!(r, Rect::default());
+    }
+
+    #[test]
+    fn layout_normal_mode_has_all_areas() {
+        let area = rect(0, 0, 80, 40);
+        let layout = compute_layout(area, PortraitPosition::BottomRight, None, false, false, 0);
+        // Status bar is 1 row at the bottom
+        assert_eq!(layout.status.height, 1);
+        assert_eq!(layout.status.y, 39);
+        // Input is MIN_INPUT_HEIGHT (3) above status
+        assert_eq!(layout.input.height, 3);
+        assert_eq!(layout.input.y, 36);
+        // Conversation fills the rest
+        assert_eq!(layout.conversation.y, 0);
+        assert_eq!(layout.conversation.height, 36);
+        // No permission prompt
+        assert_eq!(layout.permission_prompt, Rect::default());
     }
 }

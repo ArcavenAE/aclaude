@@ -315,9 +315,9 @@ impl AppState {
         Self {
             items: Vec::new(),
             input: super::input::InputState::default(),
-            portrait_size: PortraitSize::Medium,
+            portrait_size: PortraitSize::Large,
             portrait_visible: true,
-            portrait_position: PortraitPosition::TopRight,
+            portrait_position: PortraitPosition::BottomRight,
             metrics,
             status: AppStatus::Connecting,
             scroll: ScrollState::default(),
