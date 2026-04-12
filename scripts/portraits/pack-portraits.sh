@@ -29,7 +29,7 @@ for theme_dir in "$PORTRAITS_DIR"/*/; do
     [[ ! -d "$theme_dir/original" ]] && continue
 
     echo "Packing $theme..."
-    tar czf "$DIST_DIR/${theme}.tar.gz" -C "$theme_dir" .
+    COPYFILE_DISABLE=1 tar czf "$DIST_DIR/${theme}.tar.gz" -C "$theme_dir" .
     openssl dgst -sha256 -r "$DIST_DIR/${theme}.tar.gz" | cut -d' ' -f1 > "$DIST_DIR/${theme}.sha256"
     count=$((count + 1))
 done
