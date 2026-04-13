@@ -62,6 +62,7 @@ pub fn compute_layout(
         let conversation = vertical[0];
         let input = vertical[1];
 
+        // In focus mode there's no status bar — use input as the bottom edge
         return TuiLayout {
             portrait: compute_portrait_rect(
                 portrait_position,
@@ -104,7 +105,12 @@ pub fn compute_layout(
     };
 
     TuiLayout {
-        portrait: compute_portrait_rect(portrait_position, portrait_cell_size, conversation, input),
+        portrait: compute_portrait_rect(
+            portrait_position,
+            portrait_cell_size,
+            conversation,
+            status,
+        ),
         conversation,
         permission_prompt,
         input,
@@ -116,14 +122,15 @@ pub fn compute_layout(
 ///
 /// Uses actual image cell dimensions for a tight fit. The right edge is
 /// always anchored at `terminal_width - PORTRAIT_MARGIN_RIGHT` regardless of
-/// portrait size. Position:
+/// portrait size. The portrait is an overlay and may extend over the input area.
+/// Position:
 /// - TopRight: flush with top of conversation area
-/// - BottomRight: flush against the input area's top border
+/// - BottomRight: bottom edge rests against the status bar
 fn compute_portrait_rect(
     portrait_position: PortraitPosition,
     portrait_cell_size: Option<(u16, u16)>,
     conversation: Rect,
-    input: Rect,
+    status: Rect,
 ) -> Rect {
     let Some((pw, ph)) = portrait_cell_size else {
         return Rect::default();
@@ -142,8 +149,8 @@ fn compute_portrait_rect(
     let y = match portrait_position {
         PortraitPosition::TopRight => conversation.y,
         PortraitPosition::BottomRight => {
-            // Flush against the input area's top border
-            input.y.saturating_sub(ph)
+            // Bottom edge rests against the status bar
+            status.y.saturating_sub(ph)
         }
     };
 
@@ -171,12 +178,12 @@ mod tests {
     #[test]
     fn portrait_top_right_flush_with_corner() {
         let conversation = rect(0, 0, 80, 30);
-        let input = rect(0, 30, 80, 3);
+        let status = rect(0, 33, 80, 1);
         let r = compute_portrait_rect(
             PortraitPosition::TopRight,
             Some((20, 15)),
             conversation,
-            input,
+            status,
         );
         // y flush with conversation top (no margin)
         assert_eq!(r.y, 0);
@@ -187,17 +194,19 @@ mod tests {
     }
 
     #[test]
-    fn portrait_bottom_right_flush_against_input() {
+    fn portrait_bottom_right_rests_on_status_bar() {
         let conversation = rect(0, 0, 80, 30);
-        let input = rect(0, 30, 80, 3);
+        // input at y=30 h=3, status at y=33 h=1
+        let status = rect(0, 33, 80, 1);
         let r = compute_portrait_rect(
             PortraitPosition::BottomRight,
             Some((20, 15)),
             conversation,
-            input,
+            status,
         );
-        // y: input.y (30) - height (15) = 15, no extra margin
-        assert_eq!(r.y, 15);
+        // y: status.y (33) - height (15) = 18
+        // portrait overlaps the input area (y=30..33), which is correct
+        assert_eq!(r.y, 18);
         assert_eq!(r.x, 59);
     }
 
@@ -207,7 +216,7 @@ mod tests {
             PortraitPosition::TopRight,
             None,
             rect(0, 0, 80, 30),
-            rect(0, 30, 80, 3),
+            rect(0, 33, 80, 1),
         );
         assert_eq!(r, Rect::default());
     }
@@ -218,7 +227,7 @@ mod tests {
             PortraitPosition::TopRight,
             Some((0, 10)),
             rect(0, 0, 80, 30),
-            rect(0, 30, 80, 3),
+            rect(0, 33, 80, 1),
         );
         assert_eq!(r, Rect::default());
     }
