@@ -138,11 +138,18 @@ pub fn run_session_start(
         // Launch forestage in the new window's default pane
         launch_in_last_window(&client, &session_name, persona, role)?;
 
-        // Select the new window so attach lands on it, not the old one
-        let _ = client.run_command(&format!("select-window -t '{session_name}:$'"));
+        // Don't select-window here — it would disrupt anyone already
+        // attached to this session (clears Kitty graphics, forces redraw).
+        // Instead, the attach call below targets the new window directly.
         drop(client);
 
         println!("Window added to session '{session_name}'.");
+
+        // Attach targets the new window specifically, not the session default
+        if attach {
+            return exec_attach(&socket, &format!("{session_name}:$"));
+        }
+        return Ok(());
     } else {
         // Session doesn't exist — create it
         let existing_count = user_session_count(&socket);
