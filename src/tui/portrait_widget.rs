@@ -102,8 +102,8 @@ impl PortraitWidget {
         let scale_h = max_height as f64 / native_rows as f64;
         let scale = scale_w.min(scale_h).min(1.0); // never upscale
 
-        let cols = (native_cols as f64 * scale).ceil() as u16;
-        let rows = (native_rows as f64 * scale).ceil() as u16;
+        let cols = (native_cols as f64 * scale).round() as u16;
+        let rows = (native_rows as f64 * scale).round() as u16;
 
         Some((cols.max(1), rows.max(1)))
     }
