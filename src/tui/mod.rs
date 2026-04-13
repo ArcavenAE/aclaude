@@ -20,8 +20,8 @@ use std::time::{Duration, Instant};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use crossterm::event::{
-    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    Event, KeyEventKind, MouseEventKind,
+    self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+    EnableFocusChange, EnableMouseCapture, Event, KeyEventKind, MouseEventKind,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -95,7 +95,12 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), DisableBracketedPaste, LeaveAlternateScreen);
+        let _ = execute!(
+            io::stdout(),
+            DisableBracketedPaste,
+            DisableFocusChange,
+            LeaveAlternateScreen
+        );
         original_hook(info);
     }));
 
@@ -117,7 +122,13 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
 
     // Mouse capture OFF by default — native text selection is more important
     // than mouse wheel scroll. F2 toggles mouse capture on for scrolling.
-    execute!(io::stdout(), EnterAlternateScreen, EnableBracketedPaste).map_err(|e| {
+    execute!(
+        io::stdout(),
+        EnterAlternateScreen,
+        EnableBracketedPaste,
+        EnableFocusChange
+    )
+    .map_err(|e| {
         let _ = disable_raw_mode();
         crate::error::ForestageError::Session {
             message: format!("failed to enter alternate screen: {e}"),
@@ -473,6 +484,14 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
                             }
                         }
                     }
+                    Some(Event::FocusGained) => {
+                        // Terminal regained focus — tmux window switch clears
+                        // Kitty graphics, so force the portrait to re-send.
+                        if let Some(pw) = &mut portrait_widget {
+                            pw.force_redraw();
+                        }
+                    }
+                    Some(Event::FocusLost) => {}
                     Some(Event::Resize(_, _)) => {}
                     Some(_) => {}
                     None => break Ok(()),
@@ -537,7 +556,12 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
     if mouse_captured {
         let _ = execute!(io::stdout(), DisableMouseCapture);
     }
-    let _ = execute!(io::stdout(), DisableBracketedPaste, LeaveAlternateScreen);
+    let _ = execute!(
+        io::stdout(),
+        DisableBracketedPaste,
+        DisableFocusChange,
+        LeaveAlternateScreen
+    );
     let _ = disable_raw_mode();
 
     result

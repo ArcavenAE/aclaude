@@ -108,6 +108,22 @@ impl PortraitWidget {
         Some((cols.max(1), rows.max(1)))
     }
 
+    /// Force the image protocol to re-send on the next render.
+    ///
+    /// Call this when the terminal's graphics layer has been cleared
+    /// (e.g. tmux window switch) but the app state hasn't changed.
+    /// The StatefulProtocol caches the rendered image and skips
+    /// re-sending when it thinks nothing changed — this resets that.
+    pub fn force_redraw(&mut self) {
+        if let (Some(path), Some(_)) = (&self.current_path, &self.image_state) {
+            if let Ok(img) = image::open(path) {
+                self.image_pixels = Some((img.width(), img.height()));
+                let protocol = self.picker.new_resize_protocol(img);
+                self.image_state = Some(protocol);
+            }
+        }
+    }
+
     /// Render the portrait in the given area.
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         if area.width == 0 || area.height == 0 {
