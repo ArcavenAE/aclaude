@@ -8,7 +8,7 @@ Follows the kos process: Orient → Ideate → Question → Probe → Harvest �
 Authoritative graph: `_kos/nodes/`.
 Cross-repo questions belong in the orchestrator's charter.
 
-Last updated: 2026-04-12 (session-016: charter management probe — content migration from orchestrator)
+Last updated: 2026-04-13 (session-019: session start redesign — pane-to-existing, default name, persona/role per-pane)
 
 ---
 
@@ -340,18 +340,25 @@ persona select, config keys).
 
 Cross-ref: orchestrator F15.
 
-### F8: Session Maturity — Open Issues
+### F8: Session Maturity — Open Issues [partially resolved]
 
 tmux-cmc core protocol works on macOS + Linux. Session management CLI shipped
-(B5). The resolved issues are historical record — see session log. Remaining
-open items:
+(B5). Session-019 added pane-to-existing-session behavior: `session start`
+now creates a new pane via `split_pane` when the target session exists, with
+`--persona` and `--role` per-pane overrides. Default session name is
+configurable (`tmux.default_name`, defaults to `"forestage"`). `--new` flag
+forces fresh session with petname. This partially addresses forestage#42
+(session affinity) and #17 (pane management).
 
+Remaining open items:
+
+- **Session=team CLI terminology** — current commands use "session" vocabulary;
+  the mental model is session=team, pane=agent. CLI term refactoring deferred
+  until the behavior is validated.
+- **Pane listing** (forestage#17 partial) — `session pane add` works via
+  `session start`, but `session pane list` is not yet implemented.
 - **One-shot prompt outputs raw JSON instead of text** (forestage#13) — the
   programmatic flow needs its own output rendering path.
-- **Pane management** (forestage#17) — add/list panes within sessions. Needed
-  for multi-agent layouts (supervisor + workers in one session). This is the
-  remaining gap to marvel: without pane management, marvel can't arrange
-  agent teams within a single tmux session.
 - **No integration tests against live tmux on Linux** — all platform bugs
   found by users, not by tests. B13 (platform-specific testing) applies here.
 
