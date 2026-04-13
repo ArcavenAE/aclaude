@@ -136,8 +136,10 @@ pub fn run_session_start(
             .context("new-window failed")?;
 
         // Launch forestage in the new window's default pane
-        // The new window is the last window in the session — target it by index
         launch_in_last_window(&client, &session_name, persona, role)?;
+
+        // Select the new window so attach lands on it, not the old one
+        let _ = client.run_command(&format!("select-window -t '{session_name}:$'"));
         drop(client);
 
         println!("Window added to session '{session_name}'.");
