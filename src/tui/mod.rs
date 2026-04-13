@@ -266,7 +266,7 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
                                     "  Ctrl+A/E home/end   Ctrl+W del word       Ctrl+U clear line",
                                     "  Ctrl+P portrait pos Alt+P portrait on/off Alt+S portrait size",
                                     "  Alt+T thinking      Shift+Tab perm mode   Ctrl+G editor",
-                                    "  Alt+M select mode   Shift+Arrow select    Mouse wheel scroll",
+                                    "  F2 select mode      Shift+Arrow select    Mouse wheel scroll",
                                     "  Up/Down history     Tab complete",
                                 ].join("\n");
                                 state.items.push(app::ConversationItem::SystemNotice { text: help_text });

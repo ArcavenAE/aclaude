@@ -17,7 +17,7 @@ const STATUS_HEIGHT: u16 = 1;
 const PERMISSION_HEIGHT: u16 = 6;
 
 /// Portrait margin from the right terminal edge.
-const PORTRAIT_MARGIN_RIGHT: u16 = 1;
+const PORTRAIT_MARGIN_RIGHT: u16 = 0;
 
 /// Computed layout areas for a single frame.
 pub struct TuiLayout {
@@ -143,10 +143,8 @@ fn compute_portrait_rect(
     let y = match portrait_position {
         PortraitPosition::TopRight => conversation.y,
         PortraitPosition::BottomRight => {
-            // Bottom edge at the input area's bottom border (just above status bar).
-            // Portrait overlays conversation and input but not the status bar.
-            let bottom = input.y + input.height;
-            bottom.saturating_sub(ph)
+            // Bottom edge rests at the top of the input area (bottom of conversation).
+            input.y.saturating_sub(ph)
         }
     };
 
@@ -181,18 +179,17 @@ mod tests {
             conversation,
             input,
         );
-        // y flush with conversation top (no margin)
+        // y flush with conversation top
         assert_eq!(r.y, 0);
-        // right edge: 80 - 1 (margin) - 20 (width) = 59
-        assert_eq!(r.x, 59);
+        // right edge: 80 - 0 (margin) - 20 (width) = 60
+        assert_eq!(r.x, 60);
         assert_eq!(r.width, 20);
         assert_eq!(r.height, 15);
     }
 
     #[test]
-    fn portrait_bottom_right_above_status_bar() {
+    fn portrait_bottom_right_above_input() {
         let conversation = rect(0, 0, 80, 30);
-        // input at y=30 h=3 (status at y=33)
         let input = rect(0, 30, 80, 3);
         let r = compute_portrait_rect(
             PortraitPosition::BottomRight,
@@ -200,9 +197,9 @@ mod tests {
             conversation,
             input,
         );
-        // y: (input.y + input.height) - height = (30 + 3) - 15 = 18
-        assert_eq!(r.y, 18);
-        assert_eq!(r.x, 59);
+        // y: input.y (30) - height (15) = 15
+        assert_eq!(r.y, 15);
+        assert_eq!(r.x, 60);
     }
 
     #[test]

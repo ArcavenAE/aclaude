@@ -613,8 +613,10 @@ pub fn handle_key(
         (KeyModifiers::ALT, KeyCode::Char('s')) => InputAction::PortraitCycleSize,
 
         // Alt shortcuts
-        (KeyModifiers::ALT, KeyCode::Char('m')) => InputAction::ToggleMouseCapture,
         (KeyModifiers::ALT, KeyCode::Char('t')) => InputAction::ToggleThinking,
+
+        // F2: toggle mouse capture for text selection
+        (_, KeyCode::F(2)) => InputAction::ToggleMouseCapture,
 
         // Cycle permission mode (Shift+Tab)
         (KeyModifiers::SHIFT, KeyCode::BackTab) => InputAction::CyclePermissionMode,

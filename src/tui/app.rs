@@ -946,51 +946,99 @@ pub fn render_input(frame: &mut Frame, state: &AppState, area: Rect) {
         AppStatus::Error => "Error — press Ctrl+C to exit",
     };
 
-    let display_text = if state.input.buffer.is_empty() {
-        Span::styled(placeholder, Style::default().fg(Color::DarkGray))
-    } else {
-        Span::styled(
-            state.input.buffer.as_str(),
-            Style::default().fg(Color::White),
-        )
-    };
-
-    // Compute cursor line to determine scroll offset.
-    // Inner height = area height - 2 (top + bottom border).
     let inner_width = area.width;
     let inner_height = area.height.saturating_sub(2);
-    let capped_cursor = state.input.cursor.min(u16::MAX as usize - 2) as u16;
-    let char_pos = capped_cursor + 2; // +2 for "> "
-    let cursor_line = if inner_width == 0 {
-        0
+
+    if state.input.buffer.is_empty() {
+        let input = Paragraph::new(Line::from(vec![
+            Span::styled("> ", Style::default().fg(Color::Green)),
+            Span::styled(placeholder, Style::default().fg(Color::DarkGray)),
+        ]))
+        .block(Block::default().borders(Borders::TOP | Borders::BOTTOM));
+        frame.render_widget(input, area);
+        // Cursor after "> "
+        frame.set_cursor_position((area.x + 2, area.y + 1));
+        return;
+    }
+
+    // Build lines from buffer content. First line gets "> " prefix.
+    let text_style = Style::default().fg(Color::White);
+    let prefix_style = Style::default().fg(Color::Green);
+    let buf_lines: Vec<&str> = state.input.buffer.split('\n').collect();
+    let mut lines: Vec<Line> = Vec::with_capacity(buf_lines.len());
+    for (i, line_text) in buf_lines.iter().enumerate() {
+        if i == 0 {
+            lines.push(Line::from(vec![
+                Span::styled("> ", prefix_style),
+                Span::styled(line_text.to_string(), text_style),
+            ]));
+        } else {
+            lines.push(Line::from(Span::styled(line_text.to_string(), text_style)));
+        }
+    }
+
+    // Compute cursor position in the rendered text.
+    // Walk through buffer lines to find which visual line the cursor is on.
+    let chars: Vec<char> = state.input.buffer.chars().collect();
+    let cursor_pos = state.input.cursor.min(chars.len());
+
+    // Find which buffer line and column the cursor is on
+    let mut remaining = cursor_pos;
+    let mut buf_line_idx = 0;
+    for (i, line_text) in buf_lines.iter().enumerate() {
+        let line_chars = line_text.chars().count();
+        if remaining <= line_chars {
+            buf_line_idx = i;
+            break;
+        }
+        remaining -= line_chars + 1; // +1 for the newline
+        buf_line_idx = i + 1;
+    }
+    let col_in_line = remaining;
+
+    // Account for "> " prefix on first line
+    let effective_col = if buf_line_idx == 0 {
+        col_in_line + 2
     } else {
-        char_pos / inner_width
+        col_in_line
     };
 
-    // Scroll so cursor line is always visible within the input area
-    let scroll_offset = cursor_line.saturating_sub(inner_height.saturating_sub(1));
+    // Compute visual line accounting for wrapping
+    let mut visual_line: u16 = 0;
+    for (i, buf_line) in buf_lines.iter().enumerate().take(buf_line_idx) {
+        let line_len = buf_line.chars().count() as u16;
+        let display_len = if i == 0 { line_len + 2 } else { line_len };
+        if inner_width > 0 && display_len > 0 {
+            visual_line += (display_len.saturating_sub(1) / inner_width) + 1;
+        } else {
+            visual_line += 1;
+        }
+    }
+    // Add wrapped lines within the cursor's buffer line
+    if inner_width > 0 && effective_col as u16 > 0 {
+        visual_line += effective_col as u16 / inner_width;
+    }
 
-    let input = Paragraph::new(Line::from(vec![
-        Span::styled("> ", Style::default().fg(Color::Green)),
-        display_text,
-    ]))
-    .block(Block::default().borders(Borders::TOP | Borders::BOTTOM))
-    .wrap(Wrap { trim: false })
-    .scroll((scroll_offset, 0));
+    let cursor_col = if inner_width > 0 {
+        effective_col as u16 % inner_width
+    } else {
+        0
+    };
+
+    // Scroll so cursor line is always visible
+    let scroll_offset = visual_line.saturating_sub(inner_height.saturating_sub(1));
+
+    let input = Paragraph::new(Text::from(lines))
+        .block(Block::default().borders(Borders::TOP | Borders::BOTTOM))
+        .wrap(Wrap { trim: false })
+        .scroll((scroll_offset, 0));
 
     frame.render_widget(input, area);
 
-    // Position cursor within the visible area
-    let (cursor_x, cursor_y) = if inner_width == 0 {
-        (area.x, area.y + 1)
-    } else {
-        let visible_line = cursor_line - scroll_offset;
-        let col = char_pos % inner_width;
-        (area.x + col, area.y + 1 + visible_line) // +1 for top border
-    };
+    let visible_line = visual_line - scroll_offset;
     frame.set_cursor_position((
-        cursor_x.min(area.x + area.width - 1),
-        cursor_y.min(area.y + area.height - 1),
+        (area.x + cursor_col).min(area.x + area.width - 1),
+        (area.y + 1 + visible_line).min(area.y + area.height - 1),
     ));
 }
 
