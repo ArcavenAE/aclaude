@@ -77,6 +77,9 @@ pub struct TmuxConfig {
     pub socket: String,
     #[serde(default = "default_status_interval")]
     pub status_interval: u32,
+    /// Default session name for `session start` when no name is given.
+    #[serde(default = "default_session_name")]
+    pub default_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,6 +113,9 @@ fn default_socket() -> String {
 }
 fn default_status_interval() -> u32 {
     2
+}
+fn default_session_name() -> String {
+    "forestage".to_string()
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -164,6 +170,7 @@ impl Default for TmuxConfig {
             layout: default_layout(),
             socket: default_socket(),
             status_interval: default_status_interval(),
+            default_name: default_session_name(),
         }
     }
 }

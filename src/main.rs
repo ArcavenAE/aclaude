@@ -128,9 +128,9 @@ enum PortraitAction {
 
 #[derive(Subcommand)]
 enum SessionAction {
-    /// Start an forestage tmux session
+    /// Start an forestage tmux session (adds a pane if session exists)
     Start {
-        /// Session name (default: forestage-{petname})
+        /// Session name (default: config tmux.default_name)
         #[arg(short = 't', long = "session-name")]
         name: Option<String>,
         /// tmux socket name override
@@ -139,6 +139,15 @@ enum SessionAction {
         /// Don't attach terminal to the session after starting
         #[arg(long)]
         no_attach: bool,
+        /// Force create a new session (petname) instead of joining existing
+        #[arg(long)]
+        new: bool,
+        /// Persona (theme/character) override for this pane
+        #[arg(long)]
+        persona: Option<String>,
+        /// Role override for this pane
+        #[arg(long)]
+        role: Option<String>,
     },
     /// Attach to an existing forestage session
     Attach {
@@ -413,12 +422,18 @@ fn main() -> anyhow::Result<()> {
                     name,
                     socket,
                     no_attach,
+                    new,
+                    persona,
+                    role,
                 } => {
                     session_cmd::run_session_start(
                         &cfg,
                         socket.as_deref(),
                         name.as_deref(),
                         !no_attach,
+                        new,
+                        persona.as_deref(),
+                        role.as_deref(),
                     )?;
                 }
                 SessionAction::Attach { name, socket } => {

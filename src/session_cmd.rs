@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use anyhow::{Context, Result};
-use tmux_cmc::{Client, ConnectOptions, NewSessionOptions};
+use tmux_cmc::{Client, ConnectOptions, NewSessionOptions, SplitPaneOptions, WindowId};
 
 use crate::config::ForestageConfig;
 use crate::petname;
@@ -27,10 +27,15 @@ fn socket_name(config: &ForestageConfig, socket: Option<&str>) -> String {
         .unwrap_or_else(|| config.tmux.socket.clone())
 }
 
-/// Resolve the session name: use the provided name, or generate a petname.
-fn resolve_session_name(name: Option<&str>) -> String {
+/// Resolve the session name: use the provided name, or the config default.
+fn resolve_session_name(name: Option<&str>, config: &ForestageConfig) -> String {
     name.map(str::to_owned)
-        .unwrap_or_else(|| format!("forestage-{}", petname::generate()))
+        .unwrap_or_else(|| config.tmux.default_name.clone())
+}
+
+/// Generate a fresh petname session name (for --new).
+fn fresh_session_name() -> String {
+    format!("forestage-{}", petname::generate())
 }
 
 /// Check how many user sessions exist on the socket.
@@ -80,14 +85,27 @@ fn smart_connect(socket: &str, session_name: &str, is_new_session: bool) -> Resu
     Client::connect(&opts).context("failed to connect to tmux — is tmux installed?")
 }
 
-/// Start (or attach to) an forestage tmux session.
+/// Start (or add a pane to) a forestage tmux session.
+///
+/// - If the target session doesn't exist: create it with the first pane.
+/// - If the target session exists: add a new pane to it via split_pane.
+/// - `--new` forces creation of a fresh session with a petname.
+/// - `--persona` and `--role` are passed through to the forestage binary
+///   launched in the new pane.
 pub fn run_session_start(
     config: &ForestageConfig,
     socket: Option<&str>,
     session_name: Option<&str>,
     attach: bool,
+    force_new: bool,
+    persona: Option<&str>,
+    role: Option<&str>,
 ) -> Result<()> {
-    let session_name = resolve_session_name(session_name);
+    let session_name = if force_new {
+        fresh_session_name()
+    } else {
+        resolve_session_name(session_name, config)
+    };
     let socket = socket_name(config, socket);
 
     // Check if this session already exists
@@ -97,72 +115,81 @@ pub fn run_session_start(
         .is_ok_and(|o| o.status.success());
 
     if already_exists {
-        println!("Session '{session_name}' already exists.");
-        println!(
-            "Attach with: {} session attach -t {session_name}",
-            binary_name()
-        );
-        if attach {
-            return exec_attach(&socket, &session_name);
-        }
-        return Ok(());
-    }
+        // Session exists — add a new pane to it
+        println!("Adding pane to session '{session_name}'...");
 
-    // Determine connection strategy
-    let existing_count = user_session_count(&socket);
-
-    if existing_count == 0 {
-        // First session: create it, then attach control mode to it (Pattern 1)
-        println!("Creating session '{session_name}'...");
-
-        // Create the session detached first
-        let status = Command::new("tmux")
-            .args([
-                "-L",
-                &socket,
-                "new-session",
-                "-d",
-                "-s",
-                &session_name,
-                "-x",
-                "200",
-                "-y",
-                "50",
-            ])
-            .status()
-            .context("failed to create tmux session")?;
-        if !status.success() {
-            anyhow::bail!("tmux new-session failed");
-        }
-
-        // Attach control mode directly to the user's session
         let client = smart_connect(&socket, &session_name, false)?;
-        configure_session(&client, config, &session_name)?;
-        launch_in_pane(&client, &session_name)?;
-        drop(client);
-    } else {
-        // Additional session: use shared _ctrl (Pattern 2)
-        // If upgrading from Pattern 1 (one session, no _ctrl), the
-        // smart_connect will create _ctrl automatically.
-        println!("Creating session '{session_name}'...");
 
-        let client = smart_connect(&socket, &session_name, true)?;
-        client
-            .new_session(&NewSessionOptions {
-                name: Some(session_name.clone()),
-                detached: true,
+        // Query window ID for the current window in this session
+        let win_id = query_window_id(&client, &session_name)?;
+
+        // Split the window to create a new pane
+        let pane_id = client
+            .split_pane(&SplitPaneOptions {
+                target: win_id,
+                vertical: false, // horizontal split (stacked)
                 ..Default::default()
             })
-            .context("new-session failed")?;
-        configure_session(&client, config, &session_name)?;
-        launch_in_pane(&client, &session_name)?;
-        drop(client);
-    }
+            .context("split-pane failed")?;
 
-    println!(
-        "Session ready. Attach with: {} session attach -t {session_name}",
-        binary_name()
-    );
+        // Launch forestage in the new pane
+        launch_in_pane_by_id(&client, &pane_id, persona, role)?;
+        drop(client);
+
+        println!("Pane added to session '{session_name}'.",);
+    } else {
+        // Session doesn't exist — create it
+        let existing_count = user_session_count(&socket);
+
+        if existing_count == 0 {
+            // First session: create it, then attach control mode to it (Pattern 1)
+            println!("Creating session '{session_name}'...");
+
+            let status = Command::new("tmux")
+                .args([
+                    "-L",
+                    &socket,
+                    "new-session",
+                    "-d",
+                    "-s",
+                    &session_name,
+                    "-x",
+                    "200",
+                    "-y",
+                    "50",
+                ])
+                .status()
+                .context("failed to create tmux session")?;
+            if !status.success() {
+                anyhow::bail!("tmux new-session failed");
+            }
+
+            let client = smart_connect(&socket, &session_name, false)?;
+            configure_session(&client, config, &session_name)?;
+            launch_in_pane(&client, &session_name, persona, role)?;
+            drop(client);
+        } else {
+            // Additional session: use shared _ctrl (Pattern 2)
+            println!("Creating session '{session_name}'...");
+
+            let client = smart_connect(&socket, &session_name, true)?;
+            client
+                .new_session(&NewSessionOptions {
+                    name: Some(session_name.clone()),
+                    detached: true,
+                    ..Default::default()
+                })
+                .context("new-session failed")?;
+            configure_session(&client, config, &session_name)?;
+            launch_in_pane(&client, &session_name, persona, role)?;
+            drop(client);
+        }
+
+        println!(
+            "Session ready. Attach with: {} session attach -t {session_name}",
+            binary_name()
+        );
+    }
 
     if attach {
         exec_attach(&socket, &session_name)?;
@@ -204,19 +231,56 @@ fn configure_session(client: &Client, config: &ForestageConfig, session_name: &s
     Ok(())
 }
 
-/// Launch forestage binary in the first pane of a session.
-fn launch_in_pane(client: &Client, session_name: &str) -> Result<()> {
+/// Build the forestage command string with optional persona/role overrides.
+fn forestage_command(persona: Option<&str>, role: Option<&str>) -> String {
     let forestage_bin =
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("forestage"));
-    let forestage_path = forestage_bin.to_string_lossy();
+    let mut cmd = format!("exec {}", forestage_bin.to_string_lossy());
+    if let Some(p) = persona {
+        cmd.push_str(&format!(" --theme {p}"));
+    }
+    if let Some(r) = role {
+        cmd.push_str(&format!(" --role {r}"));
+    }
+    cmd
+}
 
-    // Use 'exec' to replace the shell process with forestage. This avoids
-    // leaving an orphan shell and the TUI overwrites the echoed command.
+/// Launch forestage binary in the first pane of a session (for new sessions).
+fn launch_in_pane(
+    client: &Client,
+    session_name: &str,
+    persona: Option<&str>,
+    role: Option<&str>,
+) -> Result<()> {
+    let cmd = forestage_command(persona, role);
     client
-        .run_command(&format!(
-            "send-keys -t '{session_name}:0.0' 'exec {forestage_path}' Enter"
-        ))
+        .run_command(&format!("send-keys -t '{session_name}:0.0' '{cmd}' Enter"))
         .context("send-keys failed")?;
+    Ok(())
+}
+
+/// Query the window ID of the current window in a session.
+fn query_window_id(client: &Client, session_name: &str) -> Result<WindowId> {
+    let resp = client
+        .run_command(&format!(
+            "display-message -p -t '{session_name}' '#{{window_id}}'"
+        ))
+        .context("failed to query window id")?;
+    let id_str = resp.first_line().unwrap_or("@0").trim().to_owned();
+    WindowId::new(&id_str).map_err(|_| anyhow::anyhow!("invalid window id from tmux: {id_str}"))
+}
+
+/// Launch forestage binary in a specific pane (for added panes).
+fn launch_in_pane_by_id(
+    client: &Client,
+    pane_id: &tmux_cmc::PaneId,
+    persona: Option<&str>,
+    role: Option<&str>,
+) -> Result<()> {
+    let cmd = forestage_command(persona, role);
+    client
+        .run_command(&format!("send-keys -t '{pane_id}' '{cmd}' Enter"))
+        .context("send-keys to new pane failed")?;
     Ok(())
 }
 
