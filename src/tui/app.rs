@@ -955,27 +955,38 @@ pub fn render_input(frame: &mut Frame, state: &AppState, area: Rect) {
         )
     };
 
+    // Compute cursor line to determine scroll offset.
+    // Inner height = area height - 2 (top + bottom border).
+    let inner_width = area.width;
+    let inner_height = area.height.saturating_sub(2);
+    let capped_cursor = state.input.cursor.min(u16::MAX as usize - 2) as u16;
+    let char_pos = capped_cursor + 2; // +2 for "> "
+    let cursor_line = if inner_width == 0 {
+        0
+    } else {
+        char_pos / inner_width
+    };
+
+    // Scroll so cursor line is always visible within the input area
+    let scroll_offset = cursor_line.saturating_sub(inner_height.saturating_sub(1));
+
     let input = Paragraph::new(Line::from(vec![
         Span::styled("> ", Style::default().fg(Color::Green)),
         display_text,
     ]))
     .block(Block::default().borders(Borders::TOP | Borders::BOTTOM))
-    .wrap(Wrap { trim: false });
+    .wrap(Wrap { trim: false })
+    .scroll((scroll_offset, 0));
 
     frame.render_widget(input, area);
 
-    // Position cursor accounting for text wrapping.
-    // No left/right borders — inner width equals area width.
-    // +2 for "> " prefix.
-    let inner_width = area.width;
-    let capped_cursor = state.input.cursor.min(u16::MAX as usize - 2) as u16;
-    let char_pos = capped_cursor + 2; // +2 for "> "
+    // Position cursor within the visible area
     let (cursor_x, cursor_y) = if inner_width == 0 {
         (area.x, area.y + 1)
     } else {
-        let line_num = char_pos / inner_width;
+        let visible_line = cursor_line - scroll_offset;
         let col = char_pos % inner_width;
-        (area.x + col, area.y + 1 + line_num) // +1 for top border
+        (area.x + col, area.y + 1 + visible_line) // +1 for top border
     };
     frame.set_cursor_position((
         cursor_x.min(area.x + area.width - 1),
