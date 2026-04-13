@@ -202,6 +202,16 @@ impl Session {
             })
     }
 
+    /// Interrupt the subprocess (ESC behavior — stop current generation).
+    /// Sends SIGINT to the child process, same as Ctrl+C / ESC in Claude Code.
+    pub fn interrupt(&self) {
+        if let Some(pid) = self.child.id() {
+            let _ = std::process::Command::new("kill")
+                .args(["-INT", &pid.to_string()])
+                .output();
+        }
+    }
+
     /// Gracefully shut down the subprocess.
     pub async fn shutdown(&mut self) {
         let _ = self.child.kill().await;

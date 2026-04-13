@@ -345,6 +345,8 @@ pub enum InputAction {
     PortraitToggleVisible,
     /// Cycle portrait size (Alt+S).
     PortraitCycleSize,
+    /// Interrupt current generation (ESC).
+    Interrupt,
     /// No action (key consumed but no effect).
     None,
 }
@@ -624,6 +626,16 @@ pub fn handle_key(
         // Permission prompt keys
         (_, KeyCode::Char('a')) if has_permission_prompt => InputAction::PermissionAllow,
         (_, KeyCode::Char('d')) if has_permission_prompt => InputAction::PermissionDeny,
+
+        // ESC: interrupt generation or clear selection
+        (_, KeyCode::Esc) => {
+            if input.selection_anchor.is_some() {
+                input.clear_selection();
+                InputAction::None
+            } else {
+                InputAction::Interrupt
+            }
+        }
 
         // Tab completion
         (_, KeyCode::Tab) => {

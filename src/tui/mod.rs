@@ -95,12 +95,7 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();
-        let _ = execute!(
-            io::stdout(),
-            DisableBracketedPaste,
-            DisableMouseCapture,
-            LeaveAlternateScreen
-        );
+        let _ = execute!(io::stdout(), DisableBracketedPaste, LeaveAlternateScreen);
         original_hook(info);
     }));
 
@@ -120,13 +115,9 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
         pw.set_size(PortraitSize::Large, &portrait_paths);
     }
 
-    execute!(
-        io::stdout(),
-        EnterAlternateScreen,
-        EnableMouseCapture,
-        EnableBracketedPaste
-    )
-    .map_err(|e| {
+    // Mouse capture OFF by default — native text selection is more important
+    // than mouse wheel scroll. F2 toggles mouse capture on for scrolling.
+    execute!(io::stdout(), EnterAlternateScreen, EnableBracketedPaste).map_err(|e| {
         let _ = disable_raw_mode();
         crate::error::ForestageError::Session {
             message: format!("failed to enter alternate screen: {e}"),
@@ -151,8 +142,9 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
     let mut history = InputHistory::new();
     let mut text_batcher = TextBatcher::new();
 
-    // Mouse capture state — disabled during native text selection
-    let mut mouse_captured = true;
+    // Mouse capture off by default — text selection works natively.
+    // F2 toggles mouse capture on for scroll wheel support.
+    let mut mouse_captured = false;
 
     // Terminal event reader channel.
     // Uses poll() with a timeout so the thread can check the shutdown flag
@@ -213,11 +205,6 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
             term_event = term_rx.recv() => {
                 match term_event {
                     Some(Event::Key(key)) if key.kind == KeyEventKind::Press => {
-                        // Re-enable mouse capture after native selection
-                        if !mouse_captured {
-                            let _ = execute!(io::stdout(), EnableMouseCapture);
-                            mouse_captured = true;
-                        }
                         let has_perm = state.pending_permission.is_some();
                         let action = handle_key(
                             key,
@@ -228,6 +215,16 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
                         );
                         match action {
                             InputAction::Quit => break Ok(()),
+
+                            InputAction::Interrupt => {
+                                if state.status == app::AppStatus::Thinking
+                                    || state.status == app::AppStatus::Streaming
+                                    || state.status == app::AppStatus::ToolRunning
+                                {
+                                    session.interrupt();
+                                    state.set_status("Interrupted".to_string());
+                                }
+                            }
 
                             InputAction::CopySelection(text) => {
                                 copy_to_clipboard(&text);
@@ -262,12 +259,12 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
                                     "Portrait: /persona portrait [on|off|top|bottom|size <s>]",
                                     "",
                                     "Keys:",
-                                    "  Ctrl+C quit/copy    Ctrl+O transcript     Ctrl+X cut/expand",
+                                    "  Esc interrupt       Ctrl+C quit/copy      Ctrl+X cut/expand",
                                     "  Ctrl+A/E home/end   Ctrl+W del word       Ctrl+U clear line",
-                                    "  Ctrl+P portrait pos Alt+P portrait on/off Alt+S portrait size",
-                                    "  Alt+T thinking      Shift+Tab perm mode   Ctrl+G editor",
-                                    "  F2 select mode      Shift+Arrow select    Mouse wheel scroll",
-                                    "  Up/Down history     Tab complete",
+                                    "  Ctrl+O transcript   Ctrl+P portrait pos   Alt+P portrait on/off",
+                                    "  Alt+S portrait size Alt+T thinking        Shift+Tab perm mode",
+                                    "  Shift+Arrow select  F2 toggle scroll      Up/Down history",
+                                    "  Tab complete        Mouse: drag to select text",
                                 ].join("\n");
                                 state.items.push(app::ConversationItem::SystemNotice { text: help_text });
                             }
@@ -348,11 +345,11 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
                                 if mouse_captured {
                                     let _ = execute!(io::stdout(), DisableMouseCapture);
                                     mouse_captured = false;
-                                    state.set_status("Mouse capture off — select text with mouse, Alt+M to re-enable".to_string());
+                                    state.set_status("Mouse scroll off — drag to select text".to_string());
                                 } else {
                                     let _ = execute!(io::stdout(), EnableMouseCapture);
                                     mouse_captured = true;
-                                    state.set_status("Mouse capture on — scroll with mouse wheel".to_string());
+                                    state.set_status("Mouse scroll on — F2 to toggle back".to_string());
                                 }
                             }
                             InputAction::PortraitTogglePosition => {
@@ -537,12 +534,10 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
     // Cleanup — signal terminal reader thread to exit before waiting
     term_shutdown.store(true, Ordering::Relaxed);
     session.shutdown().await;
-    let _ = execute!(
-        io::stdout(),
-        DisableBracketedPaste,
-        DisableMouseCapture,
-        LeaveAlternateScreen
-    );
+    if mouse_captured {
+        let _ = execute!(io::stdout(), DisableMouseCapture);
+    }
+    let _ = execute!(io::stdout(), DisableBracketedPaste, LeaveAlternateScreen);
     let _ = disable_raw_mode();
 
     result
