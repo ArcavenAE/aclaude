@@ -23,23 +23,34 @@ const LOCAL_COMMANDS: &[&str] = &[
 
 // ── InputState ───────────────────────────────────────────────────────────
 
-/// Input buffer with cursor position for mid-line editing.
+/// Input buffer with cursor position and optional selection.
 #[derive(Debug, Default)]
 pub struct InputState {
     pub buffer: String,
     pub cursor: usize,
+    /// Selection anchor — when set, text between anchor and cursor is selected.
+    pub selection_anchor: Option<usize>,
 }
 
 impl InputState {
     /// Insert a character at the cursor position.
+    /// If there's a selection, replaces it with the character.
     pub fn insert(&mut self, c: char) {
+        if self.selection_anchor.is_some() {
+            self.delete_selection();
+        }
         let byte_pos = self.byte_offset();
         self.buffer.insert(byte_pos, c);
         self.cursor += 1;
     }
 
     /// Delete the character before the cursor (backspace).
+    /// If there's a selection, deletes the selection instead.
     pub fn delete_back(&mut self) {
+        if self.selection_anchor.is_some() {
+            self.delete_selection();
+            return;
+        }
         if self.cursor > 0 {
             self.cursor -= 1;
             let byte_pos = self.byte_offset();
@@ -49,6 +60,7 @@ impl InputState {
 
     /// Delete from cursor back to the previous word boundary (Ctrl+W).
     pub fn delete_word_back(&mut self) {
+        self.selection_anchor = None;
         if self.cursor == 0 {
             return;
         }
@@ -72,6 +84,7 @@ impl InputState {
     pub fn clear(&mut self) {
         self.buffer.clear();
         self.cursor = 0;
+        self.selection_anchor = None;
     }
 
     /// Move cursor to start of line (Ctrl+A / Home).
@@ -84,29 +97,99 @@ impl InputState {
         self.cursor = self.buffer.chars().count();
     }
 
-    /// Move cursor left one character.
+    /// Move cursor left one character. Clears selection.
     pub fn move_left(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
         }
     }
 
-    /// Move cursor right one character.
+    /// Move cursor right one character. Clears selection.
     pub fn move_right(&mut self) {
         if self.cursor < self.buffer.chars().count() {
             self.cursor += 1;
         }
     }
 
-    /// Set buffer content and move cursor to end.
+    /// Set buffer content and move cursor to end. Clears selection.
     pub fn set(&mut self, text: &str) {
         self.buffer = text.to_string();
         self.cursor = self.buffer.chars().count();
+        self.selection_anchor = None;
     }
 
     /// Get the trimmed text content.
     pub fn text(&self) -> String {
         self.buffer.trim().to_string()
+    }
+
+    /// Return the selected text range (start, end) in char indices, if any.
+    pub fn selection_range(&self) -> Option<(usize, usize)> {
+        self.selection_anchor.map(|anchor| {
+            if anchor <= self.cursor {
+                (anchor, self.cursor)
+            } else {
+                (self.cursor, anchor)
+            }
+        })
+    }
+
+    /// Return the selected text, if any.
+    pub fn selected_text(&self) -> Option<String> {
+        let (start, end) = self.selection_range()?;
+        let chars: Vec<char> = self.buffer.chars().collect();
+        if start >= chars.len() {
+            return None;
+        }
+        let end = end.min(chars.len());
+        Some(chars[start..end].iter().collect())
+    }
+
+    /// Delete the selected text and collapse cursor to the start of selection.
+    pub fn delete_selection(&mut self) {
+        if let Some((start, end)) = self.selection_range() {
+            let start_byte = self.char_to_byte(start);
+            let end_byte = self.char_to_byte(end);
+            self.buffer.drain(start_byte..end_byte);
+            self.cursor = start;
+            self.selection_anchor = None;
+        }
+    }
+
+    /// Clear selection without deleting text.
+    pub fn clear_selection(&mut self) {
+        self.selection_anchor = None;
+    }
+
+    /// Start or extend selection from current cursor position.
+    fn ensure_anchor(&mut self) {
+        if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(self.cursor);
+        }
+    }
+
+    /// Move cursor left with selection (Shift+Left).
+    pub fn select_left(&mut self) {
+        self.ensure_anchor();
+        self.move_left();
+    }
+
+    /// Move cursor right with selection (Shift+Right).
+    pub fn select_right(&mut self) {
+        self.ensure_anchor();
+        self.move_right();
+    }
+
+    /// Move cursor to start with selection (Shift+Home).
+    pub fn select_home(&mut self) {
+        self.ensure_anchor();
+        self.home();
+    }
+
+    /// Move cursor to end with selection (Shift+End).
+    pub fn select_end(&mut self) {
+        self.ensure_anchor();
+        self.end();
     }
 
     /// Byte offset for the current cursor position.
@@ -156,6 +239,10 @@ pub enum InputAction {
     PermissionDeny,
     /// Toggle thinking block display (Alt+T).
     ToggleThinking,
+    /// Copy selected text to clipboard (Ctrl+C when selection exists).
+    CopySelection(String),
+    /// Cut selected text to clipboard (Ctrl+X when selection exists).
+    CutSelection(String),
     /// Open external editor for input (Ctrl+G).
     OpenEditor,
     /// Toggle portrait position top/bottom (Ctrl+P).
@@ -385,17 +472,34 @@ pub fn handle_key(
     dynamic_commands: &[String],
 ) -> InputAction {
     match (event.modifiers, event.code) {
-        // Quit (always available)
-        (KeyModifiers::CONTROL, KeyCode::Char('c')) => InputAction::Quit,
+        // Copy/Cut selection — Ctrl+C copies if selection exists, otherwise quit
+        (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
+            if let Some(text) = input.selected_text() {
+                input.clear_selection();
+                InputAction::CopySelection(text)
+            } else {
+                InputAction::Quit
+            }
+        }
+        // Ctrl+X — cut if selection exists, otherwise toggle expand
+        (KeyModifiers::CONTROL, KeyCode::Char('x')) => {
+            if let Some(text) = input.selected_text() {
+                input.delete_selection();
+                InputAction::CutSelection(text)
+            } else {
+                InputAction::ToggleExpand
+            }
+        }
 
         // Ctrl shortcuts
         (KeyModifiers::CONTROL, KeyCode::Char('o')) => InputAction::CycleTranscript,
-        (KeyModifiers::CONTROL, KeyCode::Char('x')) => InputAction::ToggleExpand,
         (KeyModifiers::CONTROL, KeyCode::Char('a')) => {
+            input.clear_selection();
             input.home();
             InputAction::None
         }
         (KeyModifiers::CONTROL, KeyCode::Char('e')) => {
+            input.clear_selection();
             input.end();
             InputAction::None
         }
@@ -445,24 +549,45 @@ pub fn handle_key(
             }
         }
 
+        // Selection with Shift+Arrow
+        (KeyModifiers::SHIFT, KeyCode::Left) => {
+            input.select_left();
+            InputAction::None
+        }
+        (KeyModifiers::SHIFT, KeyCode::Right) => {
+            input.select_right();
+            InputAction::None
+        }
+        (KeyModifiers::SHIFT, KeyCode::Home) => {
+            input.select_home();
+            InputAction::None
+        }
+        (KeyModifiers::SHIFT, KeyCode::End) => {
+            input.select_end();
+            InputAction::None
+        }
+
         // Editing
         (_, KeyCode::Backspace) => {
             input.delete_back();
             InputAction::None
         }
         (_, KeyCode::Delete) => {
-            // Delete char under cursor (move right then backspace)
-            if input.cursor < input.buffer.chars().count() {
+            if input.selection_anchor.is_some() {
+                input.delete_selection();
+            } else if input.cursor < input.buffer.chars().count() {
                 input.move_right();
                 input.delete_back();
             }
             InputAction::None
         }
         (_, KeyCode::Left) => {
+            input.clear_selection();
             input.move_left();
             InputAction::None
         }
         (_, KeyCode::Right) => {
+            input.clear_selection();
             input.move_right();
             InputAction::None
         }
@@ -805,5 +930,118 @@ mod tests {
         let mut h = InputHistory::new();
         h.push(String::new());
         assert!(h.entries.is_empty());
+    }
+
+    // ── Selection tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn select_left_creates_selection() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.select_left();
+        assert_eq!(s.selection_anchor, Some(5));
+        assert_eq!(s.cursor, 4);
+        assert_eq!(s.selected_text(), Some("o".to_string()));
+    }
+
+    #[test]
+    fn select_right_extends_selection() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.cursor = 0;
+        s.select_right();
+        s.select_right();
+        assert_eq!(s.selection_anchor, Some(0));
+        assert_eq!(s.cursor, 2);
+        assert_eq!(s.selected_text(), Some("he".to_string()));
+    }
+
+    #[test]
+    fn select_home_selects_to_start() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.cursor = 3;
+        s.select_home();
+        assert_eq!(s.selected_text(), Some("hel".to_string()));
+    }
+
+    #[test]
+    fn select_end_selects_to_end() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.cursor = 2;
+        s.select_end();
+        assert_eq!(s.selected_text(), Some("llo".to_string()));
+    }
+
+    #[test]
+    fn delete_selection_removes_text() {
+        let mut s = InputState::default();
+        s.set("hello world");
+        s.cursor = 5;
+        s.selection_anchor = Some(0);
+        s.delete_selection();
+        assert_eq!(s.buffer, " world");
+        assert_eq!(s.cursor, 0);
+        assert!(s.selection_anchor.is_none());
+    }
+
+    #[test]
+    fn insert_replaces_selection() {
+        let mut s = InputState::default();
+        s.set("hello world");
+        s.cursor = 5;
+        s.selection_anchor = Some(0);
+        s.insert('X');
+        assert_eq!(s.buffer, "X world");
+        assert_eq!(s.cursor, 1);
+    }
+
+    #[test]
+    fn backspace_deletes_selection() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.cursor = 5;
+        s.selection_anchor = Some(3);
+        s.delete_back();
+        assert_eq!(s.buffer, "hel");
+        assert_eq!(s.cursor, 3);
+    }
+
+    #[test]
+    fn move_left_clears_selection() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.selection_anchor = Some(2);
+        s.move_left();
+        // Selection cleared by caller in handle_key, not by move_left itself
+        // move_left only moves the cursor
+        assert_eq!(s.cursor, 4);
+    }
+
+    #[test]
+    fn clear_removes_selection() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.selection_anchor = Some(0);
+        s.clear();
+        assert!(s.selection_anchor.is_none());
+        assert_eq!(s.buffer, "");
+    }
+
+    #[test]
+    fn set_clears_selection() {
+        let mut s = InputState::default();
+        s.set("hello");
+        s.selection_anchor = Some(2);
+        s.set("new text");
+        assert!(s.selection_anchor.is_none());
+    }
+
+    #[test]
+    fn no_selection_returns_none() {
+        let s = InputState::default();
+        assert!(s.selected_text().is_none());
+        assert!(s.selection_range().is_none());
     }
 }

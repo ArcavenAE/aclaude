@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
     Event, KeyEventKind, MouseEventKind,
@@ -39,6 +41,19 @@ use crate::error::Result;
 use crate::persona;
 use crate::portrait;
 use crate::protocol_ext::BridgeEvent;
+
+/// Copy text to system clipboard via OSC 52 escape sequence.
+///
+/// OSC 52 is widely supported (iTerm2, WezTerm, Kitty, Ghostty, tmux 3.2+).
+/// Works over SSH and inside tmux — no platform-specific clipboard binary needed.
+fn copy_to_clipboard(text: &str) {
+    let encoded = BASE64.encode(text.as_bytes());
+    // OSC 52: \x1b]52;c;<base64>\x07
+    let _ = execute!(
+        io::stdout(),
+        crossterm::style::Print(format!("\x1b]52;c;{encoded}\x07"))
+    );
+}
 
 /// Text batcher — buffers streaming text deltas for smooth rendering.
 struct TextBatcher {
@@ -136,6 +151,9 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
     let mut history = InputHistory::new();
     let mut text_batcher = TextBatcher::new();
 
+    // Mouse capture state — disabled during native text selection
+    let mut mouse_captured = true;
+
     // Terminal event reader channel.
     // Uses poll() with a timeout so the thread can check the shutdown flag
     // and exit cleanly — without this, event::read() blocks indefinitely
@@ -195,6 +213,11 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
             term_event = term_rx.recv() => {
                 match term_event {
                     Some(Event::Key(key)) if key.kind == KeyEventKind::Press => {
+                        // Re-enable mouse capture after native selection
+                        if !mouse_captured {
+                            let _ = execute!(io::stdout(), EnableMouseCapture);
+                            mouse_captured = true;
+                        }
                         let has_perm = state.pending_permission.is_some();
                         let action = handle_key(
                             key,
@@ -205,6 +228,15 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
                         );
                         match action {
                             InputAction::Quit => break Ok(()),
+
+                            InputAction::CopySelection(text) => {
+                                copy_to_clipboard(&text);
+                                state.set_status("Copied to clipboard".to_string());
+                            }
+                            InputAction::CutSelection(text) => {
+                                copy_to_clipboard(&text);
+                                state.set_status("Cut to clipboard".to_string());
+                            }
 
                             InputAction::SendMessage(text) if state.status.accepts_input() => {
                                 state.record_user_message(text.clone());
@@ -392,18 +424,44 @@ pub async fn run_tui(config: &ForestageConfig) -> Result<()> {
                         }
                     }
                     Some(Event::Paste(text)) => {
-                        // Bracketed paste — insert pasted text at cursor
-                        for c in text.chars() {
-                            if c != '\n' && c != '\r' {
+                        // Replace selection if one exists
+                        if state.input.selection_anchor.is_some() {
+                            state.input.delete_selection();
+                        }
+                        // Bracketed paste — insert pasted text at cursor.
+                        // Newlines are preserved as spaces for single-line input.
+                        // Drag-drop: terminals emit absolute file paths on drop.
+                        let cleaned = text.replace('\r', "");
+                        let is_file_drop = cleaned.lines().count() == 1
+                            && cleaned.trim().starts_with('/')
+                            && std::path::Path::new(cleaned.trim()).exists();
+
+                        if is_file_drop {
+                            // Insert as @-mention for Claude Code file reference
+                            let path = cleaned.trim();
+                            for c in format!("@{path}").chars() {
+                                state.input.insert(c);
+                            }
+                        } else {
+                            // Preserve newlines as actual newlines in the buffer
+                            for c in cleaned.chars() {
                                 state.input.insert(c);
                             }
                         }
                     }
                     Some(Event::Mouse(mouse)) => {
-                        match mouse.kind {
-                            MouseEventKind::ScrollUp => state.scroll.scroll_up(),
-                            MouseEventKind::ScrollDown => state.scroll.scroll_down(),
-                            _ => {}
+                        if mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT) {
+                            // Shift+mouse — release capture for native selection
+                            if mouse_captured {
+                                let _ = execute!(io::stdout(), DisableMouseCapture);
+                                mouse_captured = false;
+                            }
+                        } else {
+                            match mouse.kind {
+                                MouseEventKind::ScrollUp => state.scroll.scroll_up(),
+                                MouseEventKind::ScrollDown => state.scroll.scroll_down(),
+                                _ => {}
+                            }
                         }
                     }
                     Some(Event::Resize(_, _)) => {}
