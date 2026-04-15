@@ -45,6 +45,10 @@ pub fn start_session(config: &ForestageConfig, claude_args: &[String]) -> Result
         cmd.args(["--append-system-prompt", &system_prompt]);
     }
 
+    if !config.marvel.permission_mode.is_empty() {
+        cmd.args(["--permission-mode", &config.marvel.permission_mode]);
+    }
+
     // Pass through any additional claude CLI arguments
     if !claude_args.is_empty() {
         cmd.args(claude_args);
@@ -94,6 +98,10 @@ pub fn start_streaming_session(
 
     if !system_prompt.is_empty() {
         cmd.args(["--append-system-prompt", &system_prompt]);
+    }
+
+    if !config.marvel.permission_mode.is_empty() {
+        cmd.args(["--permission-mode", &config.marvel.permission_mode]);
     }
 
     if !claude_args.is_empty() {
@@ -210,6 +218,10 @@ pub fn run_prompt(
 
     if !system_prompt.is_empty() {
         cmd.args(["--append-system-prompt", &system_prompt]);
+    }
+
+    if !config.marvel.permission_mode.is_empty() {
+        cmd.args(["--permission-mode", &config.marvel.permission_mode]);
     }
 
     if !claude_args.is_empty() {

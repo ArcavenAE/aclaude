@@ -67,6 +67,10 @@ impl Session {
             cmd.args(["--append-system-prompt", &system_prompt]);
         }
 
+        if !config.marvel.permission_mode.is_empty() {
+            cmd.args(["--permission-mode", &config.marvel.permission_mode]);
+        }
+
         let mut child = cmd.spawn().map_err(|e| ForestageError::Session {
             message: format!("failed to start claude: {e}"),
         })?;

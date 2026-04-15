@@ -57,6 +57,32 @@ struct Cli {
     #[arg(long)]
     mode: Option<String>,
 
+    // -- Marvel integration flags --
+    // Set by marvel's forestage adapter when launching agents.
+    /// Agent session name (e.g. "squad-worker-g1-0")
+    #[arg(long)]
+    name: Option<String>,
+
+    /// Marvel workspace name
+    #[arg(long)]
+    workspace: Option<String>,
+
+    /// Marvel team name
+    #[arg(long)]
+    team: Option<String>,
+
+    /// Marvel daemon socket path
+    #[arg(long)]
+    socket: Option<String>,
+
+    /// Claude Code permission mode (passed through to claude subprocess)
+    #[arg(long)]
+    permission_mode: Option<String>,
+
+    /// Lua script path (future: native lua support)
+    #[arg(long)]
+    script: Option<String>,
+
     /// Arguments passed through to the claude CLI (after --)
     #[arg(last = true)]
     claude_args: Vec<String>,
@@ -264,6 +290,38 @@ fn main() -> anyhow::Result<()> {
         }
         if !persona_overrides.is_empty() {
             overrides.insert("persona".to_string(), toml::Value::Table(persona_overrides));
+        }
+    }
+
+    // Marvel integration overrides
+    {
+        let mut marvel_overrides = toml::Table::new();
+        if let Some(name) = &cli.name {
+            marvel_overrides.insert("name".to_string(), toml::Value::String(name.clone()));
+        }
+        if let Some(workspace) = &cli.workspace {
+            marvel_overrides.insert(
+                "workspace".to_string(),
+                toml::Value::String(workspace.clone()),
+            );
+        }
+        if let Some(team) = &cli.team {
+            marvel_overrides.insert("team".to_string(), toml::Value::String(team.clone()));
+        }
+        if let Some(socket) = &cli.socket {
+            marvel_overrides.insert("socket".to_string(), toml::Value::String(socket.clone()));
+        }
+        if let Some(perm) = &cli.permission_mode {
+            marvel_overrides.insert(
+                "permission_mode".to_string(),
+                toml::Value::String(perm.clone()),
+            );
+        }
+        if let Some(script) = &cli.script {
+            marvel_overrides.insert("script".to_string(), toml::Value::String(script.clone()));
+        }
+        if !marvel_overrides.is_empty() {
+            overrides.insert("marvel".to_string(), toml::Value::Table(marvel_overrides));
         }
     }
 

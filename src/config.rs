@@ -118,6 +118,30 @@ fn default_session_name() -> String {
     "forestage".to_string()
 }
 
+/// Marvel integration context — set by marvel's forestage adapter when
+/// launching agents, or by the user for standalone testing.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MarvelConfig {
+    /// Agent session name (e.g. "squad-worker-g1-0").
+    #[serde(default)]
+    pub name: String,
+    /// Marvel workspace name.
+    #[serde(default)]
+    pub workspace: String,
+    /// Marvel team name.
+    #[serde(default)]
+    pub team: String,
+    /// Marvel daemon socket path (for cluster.rs communication).
+    #[serde(default)]
+    pub socket: String,
+    /// Claude Code permission mode (passed through to claude subprocess).
+    #[serde(default)]
+    pub permission_mode: String,
+    /// Lua script path (future: native lua support in forestage).
+    #[serde(default)]
+    pub script: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ForestageConfig {
     #[serde(default)]
@@ -132,6 +156,8 @@ pub struct ForestageConfig {
     pub tmux: TmuxConfig,
     #[serde(default)]
     pub portrait: PortraitConfig,
+    #[serde(default)]
+    pub marvel: MarvelConfig,
 }
 
 impl Default for SessionConfig {
