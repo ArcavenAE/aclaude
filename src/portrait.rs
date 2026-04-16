@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
 use crate::config::PortraitConfig;
-use crate::persona::PersonaAgent;
+use crate::persona::Character;
 use crate::terminal::{self, DisplayTool};
 
 /// Portrait file paths by size.
@@ -93,11 +93,7 @@ fn normalize_stem(name: &str) -> String {
 /// 4. First name only
 ///
 /// For each candidate stem, tries exact match then prefix match in each size directory.
-pub fn resolve_portrait(
-    theme_slug: &str,
-    agent: &PersonaAgent,
-    role: Option<&str>,
-) -> PortraitPaths {
+pub fn resolve_portrait(theme_slug: &str, agent: &Character, role: Option<&str>) -> PortraitPaths {
     let cache_dir = portrait_cache_dir();
     let theme_dir = cache_dir.join(theme_slug);
 

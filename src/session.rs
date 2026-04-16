@@ -31,7 +31,7 @@ pub fn start_session(config: &ForestageConfig, claude_args: &[String]) -> Result
 
     let system_prompt = {
         let theme = persona::load_theme(&config.persona.theme)?;
-        let agent = persona::get_agent(&theme, &config.persona.role)?;
+        let agent = persona::get_character_by_legacy_role(&theme, &config.persona.role)?;
         persona::build_system_prompt(&theme, agent, &config.persona.immersion)
     };
 
@@ -83,7 +83,7 @@ pub fn start_streaming_session(
 
     let system_prompt = {
         let theme = persona::load_theme(&config.persona.theme)?;
-        let agent = persona::get_agent(&theme, &config.persona.role)?;
+        let agent = persona::get_character_by_legacy_role(&theme, &config.persona.role)?;
         persona::build_system_prompt(&theme, agent, &config.persona.immersion)
     };
 
@@ -158,9 +158,9 @@ pub fn start_streaming_session(
 
                     if config.statusline.enabled {
                         let theme = persona::load_theme(&config.persona.theme).ok();
-                        let agent = theme
-                            .as_ref()
-                            .and_then(|t| persona::get_agent(t, &config.persona.role).ok());
+                        let agent = theme.as_ref().and_then(|t| {
+                            persona::get_character_by_legacy_role(t, &config.persona.role).ok()
+                        });
                         let character_name = agent
                             .map(|a| a.character.clone())
                             .unwrap_or_else(|| "forestage".to_string());
@@ -199,7 +199,7 @@ pub fn run_prompt(
 
     let system_prompt = {
         let theme = persona::load_theme(&config.persona.theme)?;
-        let agent = persona::get_agent(&theme, &config.persona.role)?;
+        let agent = persona::get_character_by_legacy_role(&theme, &config.persona.role)?;
         persona::build_system_prompt(&theme, agent, &config.persona.immersion)
     };
 

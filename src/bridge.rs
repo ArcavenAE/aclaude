@@ -48,7 +48,7 @@ impl Session {
 
         let system_prompt = {
             let theme = persona::load_theme(&config.persona.theme)?;
-            let agent = persona::get_agent(&theme, &config.persona.role)?;
+            let agent = persona::get_character_by_legacy_role(&theme, &config.persona.role)?;
             persona::build_system_prompt(&theme, agent, &config.persona.immersion)
         };
 

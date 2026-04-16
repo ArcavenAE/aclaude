@@ -24,8 +24,8 @@ pub enum ForestageError {
     #[error("theme not found: {slug}")]
     ThemeNotFound { slug: String },
 
-    #[error("role not found: {role} in theme {theme}")]
-    RoleNotFound { role: String, theme: String },
+    #[error("character not found: {character} in theme {theme}")]
+    CharacterNotFound { character: String, theme: String },
 
     #[error("session error: {message}")]
     Session { message: String },

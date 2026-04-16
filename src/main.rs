@@ -408,8 +408,8 @@ fn main() -> anyhow::Result<()> {
                 }
 
                 let theme = persona::load_theme(&name)?;
-                let agent_data = persona::get_agent(&theme, &agent)?;
-                let portraits = portrait::resolve_portrait(&name, agent_data, Some(&agent));
+                let character_data = persona::get_character_by_legacy_role(&theme, &agent)?;
+                let portraits = portrait::resolve_portrait(&name, character_data, Some(&agent));
 
                 // Portrait before card (position: top)
                 if show_portrait && portrait_position == "top" {
@@ -427,26 +427,26 @@ fn main() -> anyhow::Result<()> {
                 if let Some(title) = &theme.theme.user_title {
                     println!("User title: {title}");
                 }
-                println!("Roles: {}", {
-                    let mut roles: Vec<_> = theme.agents.keys().collect();
-                    roles.sort();
-                    roles
+                println!("Characters: {}", {
+                    let mut chars: Vec<_> = theme.characters.keys().collect();
+                    chars.sort();
+                    chars
                         .iter()
                         .map(|s| s.as_str())
                         .collect::<Vec<_>>()
                         .join(", ")
                 });
                 println!();
-                println!("Agent: {} (role: {agent})", agent_data.character);
-                println!("  Style: {}", agent_data.style);
-                println!("  Expertise: {}", agent_data.expertise);
-                println!("  Trait: {}", agent_data.r#trait);
-                if !agent_data.quirks.is_empty() {
-                    println!("  Quirks: {}", agent_data.quirks.join("; "));
+                println!("Agent: {} (role: {agent})", character_data.character);
+                println!("  Style: {}", character_data.style);
+                println!("  Expertise: {}", character_data.expertise);
+                println!("  Trait: {}", character_data.r#trait);
+                if !character_data.quirks.is_empty() {
+                    println!("  Quirks: {}", character_data.quirks.join("; "));
                 }
-                if !agent_data.catchphrases.is_empty() {
+                if !character_data.catchphrases.is_empty() {
                     println!("  Catchphrases:");
-                    for phrase in &agent_data.catchphrases {
+                    for phrase in &character_data.catchphrases {
                         println!("    - \"{phrase}\"");
                     }
                 }
