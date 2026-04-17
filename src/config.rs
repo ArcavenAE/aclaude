@@ -148,6 +148,14 @@ pub struct MarvelConfig {
     /// Claude Code permission mode (passed through to claude subprocess).
     #[serde(default)]
     pub permission_mode: String,
+    /// Pass `--dangerously-skip-permissions` to the claude subprocess. When
+    /// true, ALL tool-permission prompts are bypassed — Claude Code runs
+    /// every tool request without asking. Intended for autonomous agents
+    /// (marvel-managed teams, multiclaude-style fleets) where an
+    /// interactive approver isn't present. Do not enable for interactive
+    /// use unless you trust the agent and prompt completely.
+    #[serde(default)]
+    pub dangerously_skip_permissions: bool,
     /// Lua script path (future: native lua support in forestage).
     #[serde(default)]
     pub script: String,

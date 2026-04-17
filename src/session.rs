@@ -1,11 +1,27 @@
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
-use crate::config::ForestageConfig;
+use crate::config::{ForestageConfig, MarvelConfig};
 use crate::error::{ForestageError, Result};
 use crate::persona;
 use crate::protocol::{self, ClaudeEvent, SessionUsage};
 use crate::statusline;
+
+/// Return the permission flags this config contributes to a `claude`
+/// command line, in order. Returned as `String`s so both `std::process`
+/// (session.rs) and `tokio::process` (bridge.rs) call sites can pass the
+/// slice directly to their respective `Command::args`.
+pub(crate) fn permission_flags_for(cfg: &MarvelConfig) -> Vec<String> {
+    let mut out = Vec::new();
+    if !cfg.permission_mode.is_empty() {
+        out.push("--permission-mode".to_string());
+        out.push(cfg.permission_mode.clone());
+    }
+    if cfg.dangerously_skip_permissions {
+        out.push("--dangerously-skip-permissions".to_string());
+    }
+    out
+}
 
 /// Check that the `claude` CLI is available.
 pub fn find_claude() -> Result<String> {
@@ -51,9 +67,7 @@ pub fn start_session(config: &ForestageConfig, claude_args: &[String]) -> Result
         cmd.args(["--append-system-prompt", &system_prompt]);
     }
 
-    if !config.marvel.permission_mode.is_empty() {
-        cmd.args(["--permission-mode", &config.marvel.permission_mode]);
-    }
+    cmd.args(permission_flags_for(&config.marvel));
 
     // Pass through any additional claude CLI arguments
     if !claude_args.is_empty() {
@@ -112,9 +126,7 @@ pub fn start_streaming_session(
         cmd.args(["--append-system-prompt", &system_prompt]);
     }
 
-    if !config.marvel.permission_mode.is_empty() {
-        cmd.args(["--permission-mode", &config.marvel.permission_mode]);
-    }
+    cmd.args(permission_flags_for(&config.marvel));
 
     if !claude_args.is_empty() {
         cmd.args(claude_args);
@@ -238,9 +250,7 @@ pub fn run_prompt(
         cmd.args(["--append-system-prompt", &system_prompt]);
     }
 
-    if !config.marvel.permission_mode.is_empty() {
-        cmd.args(["--permission-mode", &config.marvel.permission_mode]);
-    }
+    cmd.args(permission_flags_for(&config.marvel));
 
     if !claude_args.is_empty() {
         cmd.args(claude_args);
@@ -271,5 +281,75 @@ pub fn run_prompt(
             // Fallback: return raw if parsing fails
             Ok(raw)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn permission_flags_empty_config_emits_nothing() {
+        let cfg = MarvelConfig::default();
+        assert!(permission_flags_for(&cfg).is_empty());
+    }
+
+    #[test]
+    fn permission_flags_mode_only() {
+        let cfg = MarvelConfig {
+            permission_mode: "acceptEdits".into(),
+            ..MarvelConfig::default()
+        };
+        assert_eq!(
+            permission_flags_for(&cfg),
+            vec!["--permission-mode".to_string(), "acceptEdits".to_string()]
+        );
+    }
+
+    #[test]
+    fn permission_flags_dangerously_skip_only() {
+        let cfg = MarvelConfig {
+            dangerously_skip_permissions: true,
+            ..MarvelConfig::default()
+        };
+        assert_eq!(
+            permission_flags_for(&cfg),
+            vec!["--dangerously-skip-permissions".to_string()]
+        );
+    }
+
+    #[test]
+    fn permission_flags_both_set() {
+        // Both flags are independent — Claude Code accepts either or both.
+        // Callers who want bypass-only should leave permission_mode empty.
+        let cfg = MarvelConfig {
+            permission_mode: "bypassPermissions".into(),
+            dangerously_skip_permissions: true,
+            ..MarvelConfig::default()
+        };
+        let flags = permission_flags_for(&cfg);
+        assert_eq!(
+            flags,
+            vec![
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+                "--dangerously-skip-permissions".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn marvel_config_dangerously_skip_round_trips_toml() {
+        let cfg = MarvelConfig {
+            dangerously_skip_permissions: true,
+            ..MarvelConfig::default()
+        };
+        let serialized = toml::to_string(&cfg).expect("serialize");
+        assert!(
+            serialized.contains("dangerously_skip_permissions = true"),
+            "serialized TOML missing flag: {serialized}"
+        );
+        let parsed: MarvelConfig = toml::from_str(&serialized).expect("deserialize");
+        assert!(parsed.dangerously_skip_permissions);
     }
 }

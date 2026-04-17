@@ -87,6 +87,14 @@ struct Cli {
     #[arg(long)]
     permission_mode: Option<String>,
 
+    /// Bypass ALL tool-permission prompts — maps to Claude Code's
+    /// --dangerously-skip-permissions. Intended for autonomous agents
+    /// (marvel teams, multiclaude fleets) where no interactive approver
+    /// exists. Do NOT enable for interactive sessions you don't fully
+    /// trust.
+    #[arg(long, alias = "yolo")]
+    dangerously_skip_permissions: bool,
+
     /// Lua script path (future: native lua support)
     #[arg(long)]
     script: Option<String>,
@@ -330,6 +338,12 @@ fn main() -> anyhow::Result<()> {
             marvel_overrides.insert(
                 "permission_mode".to_string(),
                 toml::Value::String(perm.clone()),
+            );
+        }
+        if cli.dangerously_skip_permissions {
+            marvel_overrides.insert(
+                "dangerously_skip_permissions".to_string(),
+                toml::Value::Boolean(true),
             );
         }
         if let Some(script) = &cli.script {
