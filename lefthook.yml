@@ -1,0 +1,28 @@
+# lefthook git hooks for forestage.
+#
+# Install once per clone:
+#     lefthook install
+#
+# Pre-commit: fast feedback on staged Rust files. Full CI mirror is
+# `just lint` + `just test`.
+# Pre-push: clippy + test on the whole tree (catches regressions that
+# only surface when a change interacts with untouched code).
+#
+# Note: clippy warnings evolve with the stable toolchain. Local pre-push
+# only catches a regression if the developer's clippy is at least as new
+# as CI's. CI is authoritative.
+
+pre-commit:
+  parallel: true
+  commands:
+    fmt-check:
+      glob: "*.rs"
+      run: cargo +nightly fmt --all -- --check
+      stage_fixed: true
+
+pre-push:
+  commands:
+    clippy:
+      run: cargo clippy --all-targets --all-features -- -D warnings
+    test:
+      run: cargo test --all-targets

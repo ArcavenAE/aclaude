@@ -43,11 +43,7 @@ pub fn compute_layout(
     let text_cols = area.width; // no left/right borders
     let capped_len = input_len.min(u16::MAX as usize - 2) as u16;
     let text_with_prefix = capped_len + 2; // "> " prefix
-    let text_lines = if text_cols == 0 {
-        1
-    } else {
-        (text_with_prefix / text_cols) + 1
-    };
+    let text_lines = text_with_prefix.checked_div(text_cols).map_or(1, |n| n + 1);
     let input_height = (text_lines + 2).clamp(MIN_INPUT_HEIGHT, MAX_INPUT_HEIGHT);
     // Focus mode: maximize conversation, minimal chrome
     if focus_mode {
