@@ -1,17 +1,32 @@
 # Homebrew formula for forestage (stable channel)
 # Updated automatically by CI on tagged releases (v*)
-# macOS only (arm64). Linux users: use install.sh or build from source.
+# macOS (arm64) and Linux (amd64, arm64) supported.
 
 class Forestage < Formula
   desc "Opinionated wrapper for Claude Code with persona theming"
   homepage "https://github.com/arcavenae/forestage"
-  url "https://github.com/arcavenae/forestage/releases/download/TAG_PLACEHOLDER/forestage-darwin-arm64"
   version "VERSION_PLACEHOLDER"
-  sha256 "SHA256_ARM64_PLACEHOLDER"
   license "MIT"
 
+  if OS.mac? && Hardware::CPU.arm?
+    url "https://github.com/arcavenae/forestage/releases/download/TAG_PLACEHOLDER/forestage-darwin-arm64"
+    sha256 "SHA256_DARWIN_ARM64_PLACEHOLDER"
+  elsif OS.linux? && Hardware::CPU.arm?
+    url "https://github.com/arcavenae/forestage/releases/download/TAG_PLACEHOLDER/forestage-linux-arm64"
+    sha256 "SHA256_LINUX_ARM64_PLACEHOLDER"
+  elsif OS.linux?
+    url "https://github.com/arcavenae/forestage/releases/download/TAG_PLACEHOLDER/forestage-linux-amd64"
+    sha256 "SHA256_LINUX_AMD64_PLACEHOLDER"
+  end
+
   def install
-    bin.install "forestage-darwin-arm64" => "forestage"
+    if OS.mac? && Hardware::CPU.arm?
+      bin.install "forestage-darwin-arm64" => "forestage"
+    elsif OS.linux? && Hardware::CPU.arm?
+      bin.install "forestage-linux-arm64" => "forestage"
+    elsif OS.linux?
+      bin.install "forestage-linux-amd64" => "forestage"
+    end
   end
 
   def caveats

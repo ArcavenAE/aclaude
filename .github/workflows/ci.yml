@@ -461,6 +461,18 @@ jobs:
           name: signed-binaries-darwin-arm64
           path: dist/
 
+      - name: Download Linux amd64 binary
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: binaries-forestage-linux-amd64
+          path: dist/
+
+      - name: Download Linux arm64 binary
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: binaries-forestage-linux-arm64
+          path: dist/
+
       - name: Update Homebrew formula
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -468,7 +480,9 @@ jobs:
           TAG="${{ needs.build.outputs.tag }}"
           VERSION="${{ needs.build.outputs.version }}"
 
-          SHA256_ARM64=$(shasum -a 256 dist/forestage-a-darwin-arm64 | cut -d' ' -f1)
+          SHA256_DARWIN_ARM64=$(shasum -a 256 dist/forestage-a-darwin-arm64 | cut -d' ' -f1)
+          SHA256_LINUX_AMD64=$(shasum -a 256 dist/forestage-a-linux-amd64 | cut -d' ' -f1)
+          SHA256_LINUX_ARM64=$(shasum -a 256 dist/forestage-a-linux-arm64 | cut -d' ' -f1)
 
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/arcavenae/homebrew-tap.git" homebrew-tap-repo
           cd homebrew-tap-repo
@@ -478,7 +492,9 @@ jobs:
 
           sed -i "s/VERSION_PLACEHOLDER/$TAG/g" Formula/forestage-a.rb
           sed -i "s/TAG_PLACEHOLDER/$TAG/g" Formula/forestage-a.rb
-          sed -i "s/SHA256_ARM64_PLACEHOLDER/$SHA256_ARM64/g" Formula/forestage-a.rb
+          sed -i "s/SHA256_DARWIN_ARM64_PLACEHOLDER/$SHA256_DARWIN_ARM64/g" Formula/forestage-a.rb
+          sed -i "s/SHA256_LINUX_AMD64_PLACEHOLDER/$SHA256_LINUX_AMD64/g" Formula/forestage-a.rb
+          sed -i "s/SHA256_LINUX_ARM64_PLACEHOLDER/$SHA256_LINUX_ARM64/g" Formula/forestage-a.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
